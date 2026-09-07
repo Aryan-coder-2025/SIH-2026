@@ -1,0 +1,39 @@
+#Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+#Environment/secrets
+.env
+
+#Datasets
+data/raw/
+data/intermediate/
+data/processed/
+
+*.csv
+*.pcap
+*.pcapng
+*.parquet
+
+#Generated artifacts
+artifacts/
+
+#jupyter
+.ipynb_checkpoints/
+
+#OS / editor
+.DS_Store
+.vscode/
+
+#keeping required project directories in git 
+!data/
+!data/raw/
+!data/raw/.gitkeep
+!data/intermediate/
+!data/intermediate/.gitkeep
+!data/processed/
+!data/processed/.gitkeep
+!artifacts
+!artifacts/.gitkeep
