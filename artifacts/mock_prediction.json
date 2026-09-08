@@ -1,0 +1,32 @@
+{
+  "risk_timeline": [
+    {
+      "offset_seconds": 10,
+      "risk": 0.61
+    },
+    {
+      "offset_seconds": 20,
+      "risk": 0.74
+    },
+    {
+      "offset_seconds": 30,
+      "risk": 0.86
+    }
+  ],
+  "predicted_stage": "Discovery",
+  "top_features": [
+    {
+      "feature": "syn_count",
+      "contribution": 0.31
+    }
+  ],
+  "evidence": [
+    "high unique destination-port count",
+    "sequential destination-port access",
+    "elevated SYN ratio"
+  ],
+  "behaviour": "network service scanning",
+  "mitre": "T1046",
+  "confidence": 0.86,
+  "rationale": "Traffic pattern is consistent with systematic probing..."
+}
