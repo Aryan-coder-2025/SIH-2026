@@ -1,0 +1,33 @@
+project:
+  id: SIH26153
+  name: AI-Based Network Attack Forecasting from Network Traffic Data
+  seed: 42
+
+data:
+  dataset: CSE-CIC-IDS2018
+
+entity:
+  type: source_host
+  key: src_ip
+
+temporal:
+  window_seconds: 10
+  sequence_length_windows: 10
+  forecast_horizon_windows: 3
+
+prediction:
+  target: future_malicious_risk
+  forecast_offsets_seconds:
+    - 10
+    - 20
+    - 30
+
+features:
+  required_levels:
+    - flow
+    - packet
+
+evaluation:
+  temporal_split: true
+  split_before_sequence_construction: true
+  prevent_future_information_leakage: true
