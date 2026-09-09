@@ -37,3 +37,5 @@ artifacts/
 !data/processed/.gitkeep
 !artifacts
 !artifacts/.gitkeep
+
+pcap/
