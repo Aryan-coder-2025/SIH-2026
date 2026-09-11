@@ -1,32 +1,110 @@
 {
-  "risk_timeline": [
+  "host_id": "host-192-168-1-105",
+  "window_id": 42,
+  "timestamp": "2026-09-10T22:50:00Z",
+  "forecast": {
+    "current_risk": 0.45,
+    "predicted_risk_30s": 0.86,
+    "urgency_level": "HIGH",
+    "predicted_stage": "Discovery",
+    "risk_timeline": [
+      { "offset_seconds": 10, "risk": 0.61 },
+      { "offset_seconds": 20, "risk": 0.74 },
+      { "offset_seconds": 30, "risk": 0.86 }
+    ]
+  },
+  "mitre_attack": {
+    "technique_id": "T1046",
+    "technique_name": "Network Service Discovery",
+    "tactic_id": "TA0007",
+    "tactic_name": "Discovery",
+    "confidence": 0.88,
+    "behaviour": "network service scanning",
+    "rationale": "Traffic pattern is consistent with systematic probing across sequential destination ports within short temporal windows.",
+    "primary_indicators_matched": [
+      "unique_dst_port_count",
+      "sequential_port_ratio",
+      "syn_count"
+    ]
+  },
+  "evidence": {
+    "observed_heuristics": [
+      "High unique destination-port count (>50 ports/10s)",
+      "Sequential destination-port access pattern (score: 0.88)",
+      "Elevated SYN packet ratio without handshake completion (SYN/ACK: 6.2)"
+    ],
+    "rule_match_fraction": 1.0,
+    "rules_matched": 3,
+    "rules_total": 3
+  },
+  "explainability": {
+    "top_features": [
+      {
+        "feature": "syn_count",
+        "display_name": "TCP SYN Activity",
+        "contribution": 0.31,
+        "direction": "up",
+        "human_text": "Elevated unanswered connection initiation attempts (probing / SYN flood)"
+      },
+      {
+        "feature": "unique_dst_port_count",
+        "display_name": "Destination Port Diversity",
+        "contribution": 0.22,
+        "direction": "up",
+        "human_text": "Systematic probing across multiple target destination ports"
+      },
+      {
+        "feature": "flow_count",
+        "display_name": "Connection Frequency",
+        "contribution": 0.18,
+        "direction": "up",
+        "human_text": "Rapid surge in total connections per window"
+      },
+      {
+        "feature": "sequential_port_ratio",
+        "display_name": "Sequential Port Scanning Pattern",
+        "contribution": 0.14,
+        "direction": "up",
+        "human_text": "High ratio of ordered port probing detected"
+      },
+      {
+        "feature": "ttl_std",
+        "display_name": "TTL Variation",
+        "contribution": 0.11,
+        "direction": "up",
+        "human_text": "Unstable TTL variance indicative of potential source spoofing"
+      }
+    ],
+    "readable_bullet_points": [
+      "1. TCP SYN Activity ↑ (+0.31)",
+      "2. Destination Port Diversity ↑ (+0.22)",
+      "3. Connection Frequency ↑ (+0.18)",
+      "4. Sequential Port Scanning Pattern ↑ (+0.14)",
+      "5. TTL Variation ↑ (+0.11)"
+    ],
+    "summary_text": "Forecasted risk (HIGH 86%) is primarily driven by TCP SYN Activity and Destination Port Diversity consistent with network reconnaissance."
+  },
+  "recommendations": [
     {
-      "offset_seconds": 10,
-      "risk": 0.61
+      "action_type": "Investigation",
+      "priority": "High",
+      "title": "Investigate Source Host for Systematic Service Scanning",
+      "description": "Audit host active processes and socket connections. Inspect whether host is executing nmap, masscan, or custom scanning scripts.",
+      "command_example": "ss -tulpn | grep LISTEN ; ps aux | grep -E '(nmap|scan|nc)'"
     },
     {
-      "offset_seconds": 20,
-      "risk": 0.74
+      "action_type": "Containment",
+      "priority": "High",
+      "title": "Enforce Dynamic Rate Limiting & Firewall Ingress Filter",
+      "description": "Temporarily rate-limit SYN packet burst from source IP at perimeter firewall or host iptables to neutralize reconnaissance.",
+      "command_example": "iptables -A INPUT -p tcp -m tcp --tcp-flags SYN,ACK,FIN,RST SYN -m limit --limit 5/s --limit-burst 10 -j ACCEPT"
     },
     {
-      "offset_seconds": 30,
-      "risk": 0.86
+      "action_type": "Hardening",
+      "priority": "Medium",
+      "title": "Close Unused Perimeter Ports & Enable TCP SYN Cookies",
+      "description": "Ensure non-essential listening services are disabled and TCP SYN cookies are enabled to prevent socket exhaustion.",
+      "command_example": "sysctl -w net.ipv4.tcp_syncookies=1"
     }
-  ],
-  "predicted_stage": "Discovery",
-  "top_features": [
-    {
-      "feature": "syn_count",
-      "contribution": 0.31
-    }
-  ],
-  "evidence": [
-    "high unique destination-port count",
-    "sequential destination-port access",
-    "elevated SYN ratio"
-  ],
-  "behaviour": "network service scanning",
-  "mitre": "T1046",
-  "confidence": 0.86,
-  "rationale": "Traffic pattern is consistent with systematic probing..."
+  ]
 }
