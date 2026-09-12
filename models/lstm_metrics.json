@@ -1,0 +1,53 @@
+{
+  "10": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "pr_auc": NaN,
+    "roc_auc": NaN,
+    "confusion_matrix": [
+      [
+        128,
+        21
+      ],
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "20": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "pr_auc": NaN,
+    "roc_auc": NaN,
+    "confusion_matrix": [
+      [
+        139,
+        10
+      ],
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "30": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "pr_auc": NaN,
+    "roc_auc": NaN,
+    "confusion_matrix": [
+      [
+        127,
+        22
+      ],
+      [
+        0,
+        0
+      ]
+    ]
+  }
+}

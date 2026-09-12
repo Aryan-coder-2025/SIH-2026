@@ -1,39 +1,49 @@
-def classify_label(label):
-    """
-    Convert a raw CTU-13 label into a high-level traffic category.
-    """
+#!/usr/bin/env python3
+"""
+labels.py
+---------
+Maps raw CTU-13 Label strings to high-level traffic categories.
 
-    label = label.replace("flow=", "").strip()
+Categories:
+  - botnet   : flows that originate FROM a botnet host
+  - normal   : legitimate user traffic
+  - background: background/unknown traffic (excluded during training)
+"""
+
+
+def classify_label(label: str) -> str:
+    """Return 'botnet', 'normal', or 'background' for a raw CTU-13 label.
+
+    The function is tolerant of leading/trailing whitespace and the optional
+    'flow=' prefix used in different versions of the CTU-13 dataset.
+    """
+    if not isinstance(label, str):
+        return "background"
+
+    label = label.strip().replace("flow=", "")
 
     if label.startswith("From-Botnet"):
         return "botnet"
-
-    if label.startswith("To-Botnet"):
+    if label.startswith(("To-Botnet", "From-Normal", "To-Normal")):
         return "normal"
-
-    if label.startswith("From-Normal"):
+    # Our synthetic data uses plain 'botnet' / 'normal'
+    if label.lower() == "botnet":
+        return "botnet"
+    if label.lower() == "normal":
         return "normal"
+    # Background / unknown
+    return "background"
 
-    if label.startswith("To-Normal"):
-        return "normal"
-
-    if label.startswith("Background"):
-        return "background"
-
-    if label.startswith("From-Background"):
-        return "background"
-
-    if label.startswith("To-Background"):
-        return "background"
-
-    return "unknown"
 
 if __name__ == "__main__":
     examples = [
-        "flow=Background",
+        "flow=From-Botnet-V42-TCP",
         "flow=From-Normal-V42-Jist",
+        "flow=Background",
         "flow=To-Background-CVUT-Proxy",
+        "botnet",
+        "normal",
+        None,
     ]
-
-    for label in examples:
-        print(label, "->", classify_label(label))
+    for ex in examples:
+        print(f"{ex!r} -> {classify_label(ex)}")

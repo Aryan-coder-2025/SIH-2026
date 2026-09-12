@@ -1,39 +1,34 @@
-#Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
-.venv/
-venv/
+*$py.class
 
-#Environment/secrets
+# Virtual environments
+.venv/
+.venv*/
+venv/
+env/
+
+# Environment / secrets
 .env
 
-#Datasets
+# Datasets and large data dumps
 data/raw/
-data/intermediate/
 data/processed/
-
 *.csv
 *.pcap
 *.pcapng
 *.parquet
+*.binetflow
 
-#Generated artifacts
-artifacts/
+# PyTorch models & binary checkpoints
+models/*.pt
 
-#jupyter
+# Jupyter
 .ipynb_checkpoints/
 
-#OS / editor
+# OS / editor
 .DS_Store
 .vscode/
-
-#keeping required project directories in git 
-!data/
-!data/raw/
-!data/raw/.gitkeep
-!data/intermediate/
-!data/intermediate/.gitkeep
-!data/processed/
-!data/processed/.gitkeep
-!artifacts
-!artifacts/.gitkeep
+.idea/
+data/raw/
