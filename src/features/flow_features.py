@@ -2,7 +2,7 @@
 """
 flow_features.py
 ----------------
-Aggregate per-flow columns into per-(host_id, window_start) feature vectors.
+Aggregate per-flow columns into per-(src_ip, window_id) feature vectors.
 
 All 22 features match exactly the FEATURE_COLUMNS list in train_lstm.py and
 sequence_builder.py so the pipeline stays consistent.
@@ -13,7 +13,7 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
-REQUIRED_COLS = ["host_id", "window_start", "StartTime", "SrcAddr", "DstAddr",
+REQUIRED_COLS = ["src_ip", "window_id", "StartTime", "SrcAddr", "DstAddr",
                  "Dport", "TotBytes", "TotPkts", "Dur", "Proto", "Dir", "State"]
 
 
@@ -24,17 +24,17 @@ def _validate_columns(df: pd.DataFrame) -> None:
 
 
 def aggregate_flow_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute 22 aggregate features per (host_id, window_start).
+    """Compute 22 aggregate features per (src_ip, window_id).
 
-    Expects `df` to already have `host_id` and `window_start` columns
+    Expects `df` to already have `src_ip` and `window_id` columns
     (added by `add_time_columns`).
     """
     _validate_columns(df)
-    df = df.sort_values(["host_id", "StartTime"]).copy()
+    df = df.sort_values(["src_ip", "StartTime"]).copy()
 
     # Inter-arrival time (IAT) per host
     df["iat"] = (
-        df.groupby("host_id")["StartTime"]
+        df.groupby("src_ip")["StartTime"]
         .diff()
         .dt.total_seconds()
         .fillna(0)
@@ -45,7 +45,7 @@ def aggregate_flow_features(df: pd.DataFrame) -> pd.DataFrame:
     df["udp_flag"] = (df["Proto"].str.lower() == "udp").astype(int)
     df["bidirectional_flag"] = df["Dir"].str.contains("<->", na=False).astype(int)
 
-    grouped = df.groupby(["host_id", "window_start"], dropna=False)
+    grouped = df.groupby(["src_ip", "window_id"], dropna=False)
 
     features = grouped.agg(
         flow_count=("SrcAddr", "count"),

@@ -71,7 +71,11 @@ def build_dataset(raw_path: Path = RAW_PATH, output_path: Path = OUTPUT_PATH) ->
     # 3. Merge & save
     # ------------------------------------------------------------------
     log.info("Merging features and labels …")
-    merged = pd.merge(features, labels, on=["host_id", "window_start"], how="inner")
+    # TODO: labels currently only available from CTU-13 binetflow, not from
+    # Aman's pcap pipeline — needs a decision: either keep binetflow as the label source and
+    # join Aman's features onto it by (src_ip, window_id), or Aman's pipeline needs a labeled
+    # pcap source.
+    merged = pd.merge(features, labels, on=["src_ip", "window_id"], how="inner")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     merged.to_parquet(output_path, index=False)

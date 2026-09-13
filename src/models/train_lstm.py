@@ -160,7 +160,7 @@ def main(args) -> None:
         sys.exit(1)
 
     df = pd.read_parquet(DATA_PATH)
-    if not pd.api.types.is_datetime64_any_dtype(df["window_start"]):
+    if "window_start" in df.columns and not pd.api.types.is_datetime64_any_dtype(df["window_start"]):
         df["window_start"] = pd.to_datetime(df["window_start"])
 
     # --- build sequences ---
@@ -171,18 +171,21 @@ def main(args) -> None:
         sys.exit(1)
 
     # --- host-wise split (prevents data leakage) ---
-    host_ids = list({s["host_id"] for s in sequences})
+    host_ids = sorted({s["src_ip"] for s in sequences})
     random.shuffle(host_ids)
     n = len(host_ids)
     train_hosts = set(host_ids[:int(0.7 * n)])
     val_hosts   = set(host_ids[int(0.7 * n): int(0.85 * n)])
     test_hosts  = set(host_ids[int(0.85 * n):])
 
-    train_seq = [s for s in sequences if s["host_id"] in train_hosts]
-    val_seq   = [s for s in sequences if s["host_id"] in val_hosts]
-    test_seq  = [s for s in sequences if s["host_id"] in test_hosts]
+    train_seq = [s for s in sequences if s["src_ip"] in train_hosts]
+    val_seq   = [s for s in sequences if s["src_ip"] in val_hosts]
+    test_seq  = [s for s in sequences if s["src_ip"] in test_hosts]
 
     log.info("Split — train: %d, val: %d, test: %d", len(train_seq), len(val_seq), len(test_seq))
+
+    assert sum(s["y_10"] for s in val_seq) > 0, "Validation split has 0 positive samples."
+    assert sum(s["y_10"] for s in test_seq) > 0, "Test split has 0 positive samples."
 
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     results = {}
