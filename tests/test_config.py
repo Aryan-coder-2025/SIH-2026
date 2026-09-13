@@ -149,3 +149,69 @@ def test_invalid_feature_level_entries_are_rejected(tmp_path):
 
     with pytest.raises(ConfigError):
         load_config(path)
+
+
+def test_get_temporal_config_rejects_partial_or_ad_hoc_dict_bypass():
+    """
+    CRITICAL AUDIT INVARIANT (Issue 1):
+    get_temporal_config() must never accept an ad-hoc or partial dictionary
+    that bypasses full project configuration validation.
+    """
+    from src.config import get_temporal_config
+
+    # Missing project, entity, features, data, evaluation sections
+    with pytest.raises(ConfigError, match="project"):
+        get_temporal_config({"temporal": {"window_seconds": 10}})
+
+    with pytest.raises(ConfigError):
+        get_temporal_config({
+            "temporal": {
+                "window_seconds": 10,
+                "sequence_length_windows": 10,
+                "forecast_horizon_windows": 3,
+            },
+            "prediction": {"forecast_offsets_seconds": [10, 20, 30]},
+        })
+
+
+def test_get_temporal_config_accepts_valid_full_project_dict():
+    """Valid full project dictionary is accepted and yields matching TemporalConfig."""
+    from src.config import get_temporal_config
+
+    full_cfg = load_config(CONFIG_PATH)
+    t_cfg = get_temporal_config(full_cfg)
+    assert t_cfg.window_seconds == 10
+    assert t_cfg.sequence_length_windows == 10
+    assert t_cfg.forecast_horizon_windows == 3
+    assert t_cfg.forecast_offsets_seconds == (10, 20, 30)
+    assert t_cfg.forecast_horizon_steps == (1, 2, 3)
+
+
+def test_temporal_config_horizon_semantics_and_mismatch_rejection():
+    """
+    CRITICAL AUDIT INVARIANT (Issue 2):
+    Verify that TemporalConfig exposes unambiguous forecast_horizon_steps (window steps)
+    and forecast_offsets_seconds (physical time in seconds), enforcing offset = step * window_seconds.
+    """
+    from src.config import TemporalConfig
+
+    # Valid config
+    cfg = TemporalConfig(
+        window_seconds=10,
+        sequence_length_windows=10,
+        forecast_horizon_windows=3,
+        forecast_offsets_seconds=(10, 20, 30),
+    )
+    assert cfg.forecast_horizon_steps == (1, 2, 3)
+    assert cfg.forecast_offsets_seconds == (10, 20, 30)
+    assert cfg.forecast_horizons == (1, 2, 3)  # Backward compatible alias
+
+    # Mismatched offsets (e.g. 25s instead of 20s for step 2) must be rejected
+    with pytest.raises(ConfigError, match="forecast_offsets_seconds"):
+        TemporalConfig(
+            window_seconds=10,
+            sequence_length_windows=10,
+            forecast_horizon_windows=3,
+            forecast_offsets_seconds=(10, 25, 30),
+        )
+

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -37,28 +38,13 @@ def _require_positive_int(
     return value
 
 
-def load_config(
-    config_path: Path | str = DEFAULT_CONFIG_PATH,
-) -> dict[str, Any]:
+def validate_project_config(config: Any) -> dict[str, Any]:
     """
-    Load and validate the SIH26153 project configuration.
+    Authoritatively validate the complete SIH26153 project configuration mapping.
 
-    Uses yaml.safe_load() so arbitrary Python objects cannot be
-    constructed from the configuration file.
+    Guarantees that all canonical contracts (project ID, dataset, entity, temporal parameters,
+    forecast offsets, feature levels, and evaluation safeguards) are strictly honored.
     """
-    path = Path(config_path).resolve()
-
-    if not path.is_file():
-        raise ConfigError(f"Configuration file not found: {path}")
-
-    try:
-        with path.open("r", encoding="utf-8") as file:
-            config = yaml.safe_load(file)
-    except yaml.YAMLError as exc:
-        raise ConfigError(f"Invalid YAML syntax: {exc}") from exc
-    except OSError as exc:
-        raise ConfigError(f"Unable to read configuration: {exc}") from exc
-
     if not isinstance(config, dict):
         raise ConfigError("Configuration root must be a mapping/object.")
 
@@ -195,6 +181,128 @@ def load_config(
             )
 
     return config
+
+
+def load_config(
+    config_path: Path | str = DEFAULT_CONFIG_PATH,
+) -> dict[str, Any]:
+    """
+    Load and validate the SIH26153 project configuration from a YAML file.
+
+    Uses yaml.safe_load() so arbitrary Python objects cannot be
+    constructed from the configuration file.
+    """
+    path = Path(config_path).resolve()
+
+    if not path.is_file():
+        raise ConfigError(f"Configuration file not found: {path}")
+
+    try:
+        with path.open("r", encoding="utf-8") as file:
+            config = yaml.safe_load(file)
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"Invalid YAML syntax: {exc}") from exc
+    except OSError as exc:
+        raise ConfigError(f"Unable to read configuration: {exc}") from exc
+
+    return validate_project_config(config)
+
+
+@dataclass(frozen=True)
+class TemporalConfig:
+    """
+    Canonical temporal configuration parameters for SIH26153.
+
+    Terminology and Semantic Contracts:
+    - window_seconds: Duration of each aggregated time window in seconds (canonical: 10s).
+    - sequence_length_windows: Number of consecutive historical windows per sequence (canonical: 10).
+    - forecast_horizon_windows: Number of future steps to forecast (canonical: 3).
+    - forecast_horizon_steps: Window step indices for future forecast (canonical: (1, 2, 3)).
+    - forecast_offsets_seconds: Physical future forecast horizons in seconds (canonical: (10, 20, 30)).
+
+    Invariant:
+    forecast_offsets_seconds[i] == window_seconds * forecast_horizon_steps[i]
+    """
+
+    window_seconds: int = 10
+    sequence_length_windows: int = 10
+    forecast_horizon_windows: int = 3
+    forecast_offsets_seconds: tuple[int, ...] = (10, 20, 30)
+
+    def __post_init__(self) -> None:
+        if self.window_seconds <= 0:
+            raise ConfigError("window_seconds must be positive")
+        if self.sequence_length_windows <= 0:
+            raise ConfigError("sequence_length_windows must be positive")
+        if self.forecast_horizon_windows <= 0:
+            raise ConfigError("forecast_horizon_windows must be positive")
+        expected_offsets = tuple(
+            self.window_seconds * i for i in range(1, self.forecast_horizon_windows + 1)
+        )
+        if tuple(self.forecast_offsets_seconds) != expected_offsets:
+            raise ConfigError(
+                f"forecast_offsets_seconds {self.forecast_offsets_seconds} must match "
+                f"the configured horizon steps: {expected_offsets}"
+            )
+
+    @property
+    def history_length(self) -> int:
+        """Alias for sequence_length_windows."""
+        return self.sequence_length_windows
+
+    @property
+    def forecast_horizon_steps(self) -> tuple[int, ...]:
+        """Future window step indices (e.g. (1, 2, 3) for +1, +2, +3 steps ahead)."""
+        return tuple(range(1, self.forecast_horizon_windows + 1))
+
+    @property
+    def forecast_horizons(self) -> tuple[int, ...]:
+        """
+        Alias for forecast_horizon_steps (window-step counts).
+        DEPRECATION/CLARITY NOTE: Prefer 'forecast_horizon_steps' for window steps
+        or 'forecast_offsets_seconds' for physical time in seconds.
+        """
+        return self.forecast_horizon_steps
+
+
+def get_temporal_config(
+    source: Path | str | dict[str, Any] | TemporalConfig | None = None,
+) -> TemporalConfig:
+    """
+    Extract and return a validated TemporalConfig instance.
+
+    AUTHORITATIVE CONFIGURATION INVARIANT:
+    All configuration sources must pass through the authoritative project validator.
+    No unvalidated raw or partial dictionary is permitted to bypass the contract.
+    """
+    if source is None:
+        config = load_config(DEFAULT_CONFIG_PATH)
+    elif isinstance(source, TemporalConfig):
+        return source
+    elif isinstance(source, (Path, str)):
+        config = load_config(source)
+    elif isinstance(source, dict):
+        # Authoritative validation: Raw dictionaries MUST be complete project configs
+        # and satisfy validate_project_config(). Partial or ad-hoc bypasses are rejected.
+        config = validate_project_config(source)
+    else:
+        raise ConfigError(f"Unsupported configuration source type: {type(source)}")
+
+    temporal = config["temporal"]
+    prediction = config["prediction"]
+
+    window_sec = temporal["window_seconds"]
+    seq_len = temporal["sequence_length_windows"]
+    horizon_win = temporal["forecast_horizon_windows"]
+    offsets = tuple(prediction["forecast_offsets_seconds"])
+
+    return TemporalConfig(
+        window_seconds=window_sec,
+        sequence_length_windows=seq_len,
+        forecast_horizon_windows=horizon_win,
+        forecast_offsets_seconds=offsets,
+    )
+
 
 
 if __name__ == "__main__":
