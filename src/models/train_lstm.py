@@ -2,13 +2,14 @@
 """
 train_lstm.py
 -------------
-Early-warning botnet detection – LSTM baseline (CPU-only).
+Early-warning botnet detection - LSTM baseline (CPU-only).
 
 Usage (from project root or directly):
     python src/models/train_lstm.py
     python src/models/train_lstm.py --epochs 10 --batch-size 32
 """
 import argparse
+from collections import defaultdict
 import json
 import logging
 import os
@@ -147,6 +148,87 @@ def evaluate(model, loader) -> dict:
     }
 
 
+def split_sequences(
+    sequences: list,
+    train_ratio: float = 0.7,
+    val_ratio: float = 0.15,
+    seed: int = 42,
+) -> tuple:
+    """Split sequences into train, validation, and test sets.
+
+    If there are multiple distinct infected hosts (>= 3), performs a stratified host-wise
+    split to avoid host leakage across splits.
+    If there are fewer infected hosts (e.g. CTU-13 Scenario 1, where only 1 botnet IP exists),
+    a host-wise split would leave validation or test splits with 0 positive samples. In that
+    case, it performs a chronological (temporal) split per host based on window_id, which preserves
+    positive samples in all splits while avoiding temporal data leakage.
+    """
+    pos_hosts = {
+        s["src_ip"]
+        for s in sequences
+        if (s.get("y_10", 0) == 1 or s.get("y_20", 0) == 1 or s.get("y_30", 0) == 1)
+    }
+
+    if len(pos_hosts) >= 3:
+        log.info("Splitting host-wise (stratified across %d infected hosts)...", len(pos_hosts))
+        rng = random.Random(seed)
+        all_hosts = sorted({s["src_ip"] for s in sequences})
+        neg_hosts = [h for h in all_hosts if h not in pos_hosts]
+        pos_hosts_list = sorted(pos_hosts)
+
+        rng.shuffle(pos_hosts_list)
+        rng.shuffle(neg_hosts)
+
+        def partition(hosts):
+            n = len(hosts)
+            n_tr = max(1, int(train_ratio * n))
+            n_va = max(1, int(val_ratio * n))
+            if n_tr + n_va >= n and n > 2:
+                n_tr = n - 2
+                n_va = 1
+            return set(hosts[:n_tr]), set(hosts[n_tr : n_tr + n_va]), set(hosts[n_tr + n_va :])
+
+        tr_pos, va_pos, te_pos = partition(pos_hosts_list)
+        tr_neg, va_neg, te_neg = partition(neg_hosts)
+
+        train_hosts = tr_pos | tr_neg
+        val_hosts = va_pos | va_neg
+        test_hosts = te_pos | te_neg
+
+        train_seq = [s for s in sequences if s["src_ip"] in train_hosts]
+        val_seq = [s for s in sequences if s["src_ip"] in val_hosts]
+        test_seq = [s for s in sequences if s["src_ip"] in test_hosts]
+    else:
+        log.info(
+            "Found %d infected host(s) (< 3). Performing chronological split per host to prevent 0-positive splits...",
+            len(pos_hosts),
+        )
+        host_to_seqs = defaultdict(list)
+        for s in sequences:
+            host_to_seqs[s["src_ip"]].append(s)
+
+        train_seq, val_seq, test_seq = [], [], []
+        for src_ip, h_seqs in host_to_seqs.items():
+            h_seqs.sort(key=lambda s: s["window_id"])
+            n = len(h_seqs)
+            if n == 1:
+                train_seq.append(h_seqs[0])
+            elif n == 2:
+                train_seq.append(h_seqs[0])
+                val_seq.append(h_seqs[1])
+            else:
+                n_tr = max(1, int(train_ratio * n))
+                n_va = max(1, int(val_ratio * n))
+                if n_tr + n_va >= n:
+                    n_tr = n - 2
+                    n_va = 1
+                train_seq.extend(h_seqs[:n_tr])
+                val_seq.extend(h_seqs[n_tr : n_tr + n_va])
+                test_seq.extend(h_seqs[n_tr + n_va :])
+
+    return train_seq, val_seq, test_seq
+
+
 # -----------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------
@@ -167,22 +249,13 @@ def main(args) -> None:
     sequences = build_sequences(df)
     log.info("Generated %d sequences.", len(sequences))
     if not sequences:
-        log.error("No sequences generated — check that the processed dataset has sufficient data.")
+        log.error("No sequences generated - check that the processed dataset has sufficient data.")
         sys.exit(1)
 
-    # --- host-wise split (prevents data leakage) ---
-    host_ids = sorted({s["src_ip"] for s in sequences})
-    random.shuffle(host_ids)
-    n = len(host_ids)
-    train_hosts = set(host_ids[:int(0.7 * n)])
-    val_hosts   = set(host_ids[int(0.7 * n): int(0.85 * n)])
-    test_hosts  = set(host_ids[int(0.85 * n):])
+    # --- split dataset ---
+    train_seq, val_seq, test_seq = split_sequences(sequences, seed=SEED)
 
-    train_seq = [s for s in sequences if s["src_ip"] in train_hosts]
-    val_seq   = [s for s in sequences if s["src_ip"] in val_hosts]
-    test_seq  = [s for s in sequences if s["src_ip"] in test_hosts]
-
-    log.info("Split — train: %d, val: %d, test: %d", len(train_seq), len(val_seq), len(test_seq))
+    log.info("Split - train: %d, val: %d, test: %d", len(train_seq), len(val_seq), len(test_seq))
 
     assert sum(s["y_10"] for s in val_seq) > 0, "Validation split has 0 positive samples."
     assert sum(s["y_10"] for s in test_seq) > 0, "Test split has 0 positive samples."
@@ -198,7 +271,7 @@ def main(args) -> None:
         test_ds  = SequenceDataset(test_seq,  label_key)
 
         if len(train_ds) == 0:
-            log.warning("No training samples for horizon %ds — skipping.", horizon)
+            log.warning("No training samples for horizon %ds - skipping.", horizon)
             continue
 
         train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, drop_last=False)
@@ -236,9 +309,9 @@ def main(args) -> None:
 
     # --- persist metrics ---
     metrics_path = MODEL_DIR / "lstm_metrics.json"
-    with open(metrics_path, "w") as fp:
+    with open(metrics_path, "w", encoding="utf-8") as fp:
         json.dump(results, fp, indent=2)
-    log.info("All metrics saved → %s", metrics_path)
+    log.info("All metrics saved -> %s", metrics_path)
 
 
 if __name__ == "__main__":

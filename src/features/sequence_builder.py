@@ -62,30 +62,38 @@ def build_sequences(df: pd.DataFrame) -> list:
     _check_columns(df)
     sequences = []
 
-    for src_ip, host_df in df.groupby("src_ip"):
-        host_df = host_df.sort_values("window_id").reset_index(drop=True)
+    min_windows = HISTORY_WINDOWS + max(FORECAST_STEPS)
+    host_counts = df["src_ip"].value_counts()
+    valid_hosts = set(host_counts[host_counts >= min_windows].index)
+    if not valid_hosts:
+        log.info("Built 0 sequences from %d hosts.", df["src_ip"].nunique())
+        return []
 
-        for i in range(HISTORY_WINDOWS, len(host_df)):
-            future = host_df.iloc[i: i + 3]
-            if len(future) < 3:
-                continue  # not enough future windows
+    # Sort once globally by src_ip and window_id for blazing-fast sequential traversal
+    df_filtered = df[df["src_ip"].isin(valid_hosts)].sort_values(["src_ip", "window_id"])
 
-            # Verify all consecutive windows are contiguous (1-step window_id diff)
-            combined = host_df.iloc[i - HISTORY_WINDOWS: i + 3]
-            time_diffs = combined["window_id"].diff().dropna()
-            if not (time_diffs == 1).all():
+    for src_ip, host_df in df_filtered.groupby("src_ip", sort=False):
+        window_ids = host_df["window_id"].to_numpy(dtype=np.int64)
+        features = host_df[FEATURE_COLUMNS].to_numpy(dtype=np.float32)
+        is_botnet = (host_df["traffic_category"] == "botnet").to_numpy(dtype=np.int32)
+        n_rows = len(window_ids)
+
+        if n_rows < min_windows:
+            continue
+
+        diffs = np.diff(window_ids)
+        for i in range(HISTORY_WINDOWS, n_rows - 2):
+            # Verify all consecutive windows in [i - HISTORY_WINDOWS : i + 3] are contiguous (1-step diff)
+            if not np.all(diffs[i - HISTORY_WINDOWS : i + 2] == 1):
                 continue
-
-            history = host_df.iloc[i - HISTORY_WINDOWS: i]
-            X = history[FEATURE_COLUMNS].values.astype(np.float32)
 
             sequences.append({
                 "src_ip": src_ip,
-                "window_id": int(host_df.iloc[i]["window_id"]),
-                "X": X,
-                "y_10": int(future.iloc[0]["traffic_category"] == "botnet"),
-                "y_20": int(future.iloc[1]["traffic_category"] == "botnet"),
-                "y_30": int(future.iloc[2]["traffic_category"] == "botnet"),
+                "window_id": int(window_ids[i]),
+                "X": features[i - HISTORY_WINDOWS : i],
+                "y_10": int(is_botnet[i]),
+                "y_20": int(is_botnet[i + 1]),
+                "y_30": int(is_botnet[i + 2]),
             })
 
     log.info("Built %d sequences from %d hosts.", len(sequences), df["src_ip"].nunique())
