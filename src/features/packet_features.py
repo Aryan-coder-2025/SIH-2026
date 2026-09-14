@@ -1,64 +1,111 @@
-from scapy.all import IP, TCP, Raw
+"""
+Packet-Level Feature Extraction Module.
+
+Extracts statistical and heuristic features from a collection of Scapy packets
+belonging to a discrete (source host × 10-second window) aggregation.
+
+ENGINEERING / HEURISTIC NOTICE:
+    - 'port_scan_score' is an engineered heuristic feature normalized over an
+      arbitrary threshold of 20 unique ports; it is NOT a verified ground-truth attack label.
+    - 'sequential_port_ratio' measures the proportion of numerically adjacent port
+      pairs among sorted UNIQUE destination ports. It reflects port density/contiguity
+      in the port space rather than temporal sequential order of port visitation.
+"""
 import statistics
+from typing import Any
+
+from scapy.all import IP, TCP, Raw  # type: ignore
+
+PACKET_FEATURE_NAMES: tuple[str, ...] = (
+    "packet_count",
+    "ttl_mean",
+    "ttl_std",
+    "ttl_min",
+    "ttl_max",
+    "tcp_window_mean",
+    "tcp_window_std",
+    "fragment_count",
+    "payload_mean",
+    "payload_std",
+    "payload_min",
+    "payload_max",
+    "retransmission_count",
+    "port_scan_score",
+    "sequential_port_ratio",
+    "unique_dst_ports",
+    "packet_iat_mean",
+    "packet_iat_std",
+    "packet_iat_max",
+)
 
 
-def calculate_iat(timestamps):
-    """Calculate packet inter-arrival times."""
+def calculate_iat(timestamps: list[float]) -> list[float]:
+    """
+    Calculate packet inter-arrival times (in seconds).
+    
+    Returns an empty list if fewer than 2 timestamps are provided.
+    """
     if len(timestamps) < 2:
         return []
 
-    timestamps = sorted(timestamps)
-
-    return [
-        timestamps[i] - timestamps[i - 1]
-        for i in range(1, len(timestamps))
-    ]
+    sorted_ts = sorted(timestamps)
+    return [sorted_ts[i] - sorted_ts[i - 1] for i in range(1, len(sorted_ts))]
 
 
-def calculate_packet_features(packets):
-    """Extract packet-level features from a list of Scapy packets."""
+def calculate_packet_features(packets: list[Any]) -> dict[str, float | int]:
+    """
+    Extract packet-level features from a list of Scapy packets.
 
-    ttl_values = []
-    tcp_window_values = []
-    payload_sizes = []
-    timestamps = []
-    destination_ports = []
+    Args:
+        packets: List of Scapy packet objects within the same host-window.
 
-    fragment_count = 0
-    retransmission_count = 0
+    Returns:
+        Dictionary mapping feature names to numerical values. Returns zeroed
+        feature dictionary if packets is empty.
+    """
+    if not packets:
+        return {k: (0 if "count" in k or k == "unique_dst_ports" else 0.0) for k in PACKET_FEATURE_NAMES}
 
-    seen_tcp_packets = set()
+    ttl_values: list[float] = []
+    tcp_window_values: list[float] = []
+    payload_sizes: list[float] = []
+    timestamps: list[float] = []
+    destination_ports: list[int] = []
+
+    fragment_count: int = 0
+    retransmission_count: int = 0
+
+    seen_tcp_packets: set[tuple[str, str, int, int, int]] = set()
 
     for packet in packets:
-
         # Timestamp
         if hasattr(packet, "time"):
             timestamps.append(float(packet.time))
 
-        # IP features
+        # IPv4 features
         if IP in packet:
+            ip_layer = packet[IP]
+            ttl_values.append(float(ip_layer.ttl))
 
-            # TTL
-            ttl_values.append(packet[IP].ttl)
-
-            # Fragmentation
-            if packet[IP].flags.MF or packet[IP].frag > 0:
+            # Fragmentation detection (More Fragments flag or non-zero fragment offset)
+            if bool(ip_layer.flags.MF) or ip_layer.frag > 0:
                 fragment_count += 1
 
         # TCP features
         if TCP in packet:
+            tcp_layer = packet[TCP]
+            tcp_window_values.append(float(tcp_layer.window))
+            destination_ports.append(int(tcp_layer.dport))
 
-            tcp_window_values.append(packet[TCP].window)
-
-            destination_ports.append(packet[TCP].dport)
-
-            # Simple retransmission signature
+            # Retransmission heuristic: identical (src_ip, dst_ip, sport, dport, seq)
+            src_ip = str(packet[IP].src) if IP in packet else ""
+            dst_ip = str(packet[IP].dst) if IP in packet else ""
             tcp_key = (
-                packet[IP].src if IP in packet else "",
-                packet[IP].dst if IP in packet else "",
-                packet[TCP].sport,
-                packet[TCP].dport,
-                packet[TCP].seq
+                src_ip,
+                dst_ip,
+                int(tcp_layer.sport),
+                int(tcp_layer.dport),
+                int(tcp_layer.seq),
             )
 
             if tcp_key in seen_tcp_packets:
@@ -68,88 +115,51 @@ def calculate_packet_features(packets):
 
         # Payload size
         if Raw in packet:
-            payload_sizes.append(len(packet[Raw].load))
+            payload_sizes.append(float(len(packet[Raw].load)))
         else:
-            payload_sizes.append(0)
+            payload_sizes.append(0.0)
 
-    # Packet IAT
+    # Packet Inter-Arrival Times
     iat_values = calculate_iat(timestamps)
 
     # Unique destination ports
-    unique_ports = set(destination_ports)
+    unique_ports = sorted(set(destination_ports))
 
-    # Sequential port ratio
+    # Sequential port ratio heuristic:
+    # Measures the fraction of numerically adjacent port pairs among sorted unique ports.
     sequential_port_ratio = 0.0
-
-    if len(destination_ports) >= 2:
-        sequential_count = 0
-
-        sorted_ports = sorted(unique_ports)
-
-        for i in range(1, len(sorted_ports)):
-            if sorted_ports[i] == sorted_ports[i - 1] + 1:
-                sequential_count += 1
-
-        sequential_port_ratio = (
-            sequential_count / (len(sorted_ports) - 1)
-            if len(sorted_ports) > 1
-            else 0.0
+    if len(unique_ports) >= 2:
+        sequential_count = sum(
+            1 for i in range(1, len(unique_ports)) if unique_ports[i] == unique_ports[i - 1] + 1
         )
+        sequential_port_ratio = float(sequential_count) / float(len(unique_ports) - 1)
 
-    # Port scan score
-    port_scan_score = min(len(unique_ports) / 20.0, 1.0)
+    # Port scan heuristic score: normalized over arbitrary threshold of 20 unique ports
+    port_scan_score = min(float(len(unique_ports)) / 20.0, 1.0)
 
-    features = {
+    features: dict[str, float | int] = {
         "packet_count": len(packets),
-
         "ttl_mean": statistics.mean(ttl_values) if ttl_values else 0.0,
         "ttl_std": statistics.stdev(ttl_values) if len(ttl_values) > 1 else 0.0,
         "ttl_min": min(ttl_values) if ttl_values else 0.0,
         "ttl_max": max(ttl_values) if ttl_values else 0.0,
-
         "tcp_window_mean": (
-            statistics.mean(tcp_window_values)
-            if tcp_window_values else 0.0
+            statistics.mean(tcp_window_values) if tcp_window_values else 0.0
         ),
-
         "tcp_window_std": (
-            statistics.stdev(tcp_window_values)
-            if len(tcp_window_values) > 1 else 0.0
+            statistics.stdev(tcp_window_values) if len(tcp_window_values) > 1 else 0.0
         ),
-
         "fragment_count": fragment_count,
-
-        "payload_mean": (
-            statistics.mean(payload_sizes)
-            if payload_sizes else 0.0
-        ),
-
-        "payload_std": (
-            statistics.stdev(payload_sizes)
-            if len(payload_sizes) > 1 else 0.0
-        ),
-
+        "payload_mean": statistics.mean(payload_sizes) if payload_sizes else 0.0,
+        "payload_std": statistics.stdev(payload_sizes) if len(payload_sizes) > 1 else 0.0,
         "payload_min": min(payload_sizes) if payload_sizes else 0.0,
         "payload_max": max(payload_sizes) if payload_sizes else 0.0,
-
         "retransmission_count": retransmission_count,
-
         "port_scan_score": port_scan_score,
-
         "sequential_port_ratio": sequential_port_ratio,
-
         "unique_dst_ports": len(unique_ports),
-
-        "packet_iat_mean": (
-            statistics.mean(iat_values)
-            if iat_values else 0.0
-        ),
-
-        "packet_iat_std": (
-            statistics.stdev(iat_values)
-            if len(iat_values) > 1 else 0.0
-        ),
-
+        "packet_iat_mean": statistics.mean(iat_values) if iat_values else 0.0,
+        "packet_iat_std": statistics.stdev(iat_values) if len(iat_values) > 1 else 0.0,
         "packet_iat_max": max(iat_values) if iat_values else 0.0,
     }
 

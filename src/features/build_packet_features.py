@@ -1,91 +1,119 @@
-from scapy.all import rdpcap, IP
+"""
+Build Packet Features Module.
+
+Constructs aggregated packet-level features per (source host × 10-second window)
+from a PCAP file using memory-safe streaming extraction.
+"""
+import os
+import sys
+from typing import Any
+
 import pandas as pd
+from scapy.all import IP, PcapReader  # type: ignore
+
 from src.features.packet_features import calculate_packet_features
-from src.features.packet_windowing import group_packets_by_window
+from src.features.packet_windowing import (
+    WINDOW_SIZE,
+    get_window_end,
+    get_window_id,
+    get_window_start,
+    group_packets_by_host_and_window,
+)
 from src.features.protocol import normalize_protocol
 
 
-def build_packet_features(pcap_path):
+def build_packet_features(
+    pcap_path: str,
+    output_file: str | None = None,
+    max_packets: int | None = None,
+) -> list[dict[str, Any]]:
     """
-    Build packet-level features from a PCAP file
-    using 10-second windows.
+    Build packet-level features from a PCAP file aggregated by
+    (src_ip, window_id) in canonical 10-second windows.
+
+    Args:
+        pcap_path: Path to PCAP file.
+        output_file: Optional path to save resulting DataFrame as Parquet.
+        max_packets: Optional limit on packets parsed.
+
+    Returns:
+        List of dicts representing (source host × 10-second window) records.
+
+    Raises:
+        FileNotFoundError: If pcap_path does not exist.
     """
+    if not os.path.isfile(pcap_path):
+        raise FileNotFoundError(f"PCAP file not found: {pcap_path}")
 
-    packets = rdpcap(pcap_path)
-    windows = group_packets_by_window(packets)
+    # Read packets using streaming PcapReader
+    packets: list[Any] = []
+    try:
+        with PcapReader(pcap_path) as reader:
+            for i, pkt in enumerate(reader, start=1):
+                if max_packets is not None and i > max_packets:
+                    break
+                packets.append(pkt)
+    except Exception as e:
+        if os.path.getsize(pcap_path) == 0:
+            packets = []
+        else:
+            raise ValueError(f"Failed reading PCAP file {pcap_path}: {e}") from e
 
-    results = []
+    if not packets:
+        if output_file is not None:
+            os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
+            pd.DataFrame().to_parquet(output_file, index=False)
+        return []
 
-    for window_id, window_packets in windows.items():
+    # Group directly by canonical entity: (src_ip, window_id)
+    host_windows = group_packets_by_host_and_window(packets)
 
-        features = calculate_packet_features(window_packets)
+    results: list[dict[str, Any]] = []
 
-        src_ips = []
+    # Deterministic sorting of keys by (src_ip, window_id)
+    for (src_ip, window_id), src_packets in sorted(host_windows.items()):
+        if not src_packets:
+            continue
 
-        for packet in window_packets:
-            if IP in packet:
-                src_ips.append(packet[IP].src)
+        row: dict[str, Any] = calculate_packet_features(src_packets)
 
-        unique_src_ips = sorted(set(src_ips))
+        timestamps = [
+            float(p.time) for p in src_packets if hasattr(p, "time")
+        ]
+        first_timestamp = min(timestamps) if timestamps else float(window_id * WINDOW_SIZE)
 
-        for src_ip in unique_src_ips:
+        row["src_ip"] = src_ip
+        row["window_id"] = window_id
+        row["window_start"] = get_window_start(first_timestamp)
+        row["window_end"] = get_window_end(first_timestamp)
+        row["timestamp"] = first_timestamp
 
-            src_packets = [
-                packet
-                for packet in window_packets
-                if IP in packet and packet[IP].src == src_ip
-            ]
+        # Majority protocol for the host in this window
+        protocols = [
+            normalize_protocol(p[IP].proto) for p in src_packets if IP in p
+        ]
+        row["protocol_id"] = (
+            max(set(protocols), key=protocols.count) if protocols else -1
+        )
 
-            if not src_packets:
-                continue
+        results.append(row)
 
-            row = calculate_packet_features(src_packets)
-
-            first_timestamp = min(float(p.time) for p in src_packets)
-
-            row["src_ip"] = src_ip
-            row["window_id"] = window_id
-            row["window_start"] = window_id * 10.0
-            row["window_end"] = (window_id + 1) * 10.0
-            row["timestamp"] = first_timestamp
-
-            protocols = []
-
-            for packet in src_packets:
-                if IP in packet:
-                    protocols.append(
-                        normalize_protocol(packet[IP].proto)
-                    )
-
-            row["protocol_id"] = (
-                max(set(protocols), key=protocols.count)
-                if protocols else -1
-            )
-
-            results.append(row)
+    if output_file is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
+        df = pd.DataFrame(results)
+        df.to_parquet(output_file, index=False)
 
     return results
 
 
 if __name__ == "__main__":
-
-    import sys
-
     if len(sys.argv) < 2:
-        print("Usage: python build_packet_features.py <pcap_file>")
+        print("Usage: python build_packet_features.py <pcap_file> [output_parquet]")
         sys.exit(1)
 
-    pcap_file = sys.argv[1]
+    pcap_in = sys.argv[1]
+    parquet_out = sys.argv[2] if len(sys.argv) > 2 else "packet_features.parquet"
 
-    results = build_packet_features(pcap_file)
-
-    import pandas as pd
-
-output_file = "packet_features.parquet"
-
-df = pd.DataFrame(results)
-
-df.to_parquet(output_file, index=False)
-
-print(f"Packet windows generated: {len(results)}")
-print(f"Saved packet features to: {output_file}")
+    records = build_packet_features(pcap_in, output_file=parquet_out)
+    print(f"Packet windows generated: {len(records)}")
+    print(f"Saved packet features to: {parquet_out}")
