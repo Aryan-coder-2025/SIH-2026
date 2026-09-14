@@ -13,13 +13,21 @@ import torch.nn as nn
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from torch.utils.data import TensorDataset, DataLoader
 
-from sequence_builder import build_sequences
-from model import WorldModel
+try:
+    from src.sequence_builder import build_sequences
+    from src.model import WorldModel
+    from src.schemas.features import FORBIDDEN_FEATURE_NAMES, validate_feature_names
+except ImportError:
+    from sequence_builder import build_sequences  # type: ignore
+    from model import WorldModel  # type: ignore
+    from schemas.features import FORBIDDEN_FEATURE_NAMES, validate_feature_names  # type: ignore
 
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
+
+LAMBDA_STAGE: float = 0.3  # Documented auxiliary loss weight for stage classification head
 
 DATA_PATH = Path(
     "data/processed/feature_matrix.parquet"
@@ -255,10 +263,10 @@ def train_one_epoch(
             y_stage
         )
 
-        # Combined objective
+        # Combined objective (primary risk forecasting + auxiliary stage classification)
         loss = (
             risk_loss
-            + stage_loss
+            + LAMBDA_STAGE * stage_loss
         )
 
         loss.backward()
@@ -310,7 +318,7 @@ def evaluate_loss(
 
             loss = (
                 risk_loss
-                + stage_loss
+                + LAMBDA_STAGE * stage_loss
             )
 
             total_loss += loss.item()
@@ -364,22 +372,15 @@ def main():
         TIMESTAMP_COLUMN,
         RISK_COLUMN,
         STAGE_COLUMN,
-    }
+    } | set(FORBIDDEN_FEATURE_NAMES)
 
     feature_columns = [
         col
         for col in df.columns
         if col not in excluded_columns
+        and pd.api.types.is_numeric_dtype(df[col])
     ]
-
-    # Keep only numeric features
-    feature_columns = [
-        col
-        for col in feature_columns
-        if pd.api.types.is_numeric_dtype(
-            df[col]
-        )
-    ]
+    feature_columns = validate_feature_names(feature_columns)
 
     print(
         "Number of features:",

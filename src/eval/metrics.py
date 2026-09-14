@@ -292,6 +292,37 @@ def evaluate_risk(
     return evaluate_predictions(y_true, y_pred)
 
 
+def evaluate_prediction_records(
+    records: Sequence[Any],
+    threshold: float = 0.50,
+) -> dict[int, EvaluationResult]:
+    """
+    Evaluate multi-horizon PredictionRecords (+10s, +20s, +30s).
+
+    Groups records by forecast_horizon (in seconds) and computes
+    individual EvaluationResult metrics for each discrete horizon.
+    """
+    if not records:
+        raise EvaluationError("records cannot be empty.")
+
+    from collections import defaultdict
+    by_horizon: dict[int, tuple[list[float], list[float]]] = defaultdict(lambda: ([], []))
+
+    for rec in records:
+        h = int(getattr(rec, "forecast_horizon"))
+        y_t = float(getattr(rec, "y_true"))
+        p_r = float(getattr(rec, "predicted_risk"))
+        by_horizon[h][0].append(y_t)
+        by_horizon[h][1].append(p_r)
+
+    results: dict[int, EvaluationResult] = {}
+    for h in sorted(by_horizon.keys()):
+        y_true_list, risk_list = by_horizon[h]
+        results[h] = evaluate_risk(y_true_list, risk_list, threshold=threshold)
+
+    return results
+
+
 # ----------------------------------------------------------------------
 # Smoke test (optional manual run: python src/eval/metrics.py)
 # ----------------------------------------------------------------------

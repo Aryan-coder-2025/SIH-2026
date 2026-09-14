@@ -1,8 +1,73 @@
+"""
+Canonical Feature Schema and Validation Module.
+
+Enforces strict feature provenance, non-leakage invariants, and authoritative
+project-level feature definitions.
+"""
 from __future__ import annotations
 
 from typing import Sequence
 
+# ---------------------------------------------------------------------------
+# CANONICAL FEATURE SPECIFICATIONS
+# ---------------------------------------------------------------------------
 
+# 22 Flow-level features (Shaurya pipeline / NetFlow-binetflow format)
+CANONICAL_FLOW_FEATURE_NAMES: tuple[str, ...] = (
+    "flow_count",
+    "unique_dst_ip_count",
+    "unique_dst_port_count",
+    "bytes_total",
+    "bytes_mean",
+    "bytes_std",
+    "packets_total",
+    "packets_mean",
+    "duration_mean",
+    "duration_std",
+    "iat_mean",
+    "iat_std",
+    "iat_max",
+    "tcp_flow_ratio",
+    "udp_flow_ratio",
+    "bidirectional_ratio",
+    "syn_count",
+    "ack_count",
+    "fin_count",
+    "rst_count",
+    "psh_count",
+    "urg_count",
+)
+
+# 19 Packet-level features (Aman pipeline / raw PCAP format)
+CANONICAL_PACKET_FEATURE_NAMES: tuple[str, ...] = (
+    "packet_count",
+    "ttl_mean",
+    "ttl_std",
+    "ttl_min",
+    "ttl_max",
+    "tcp_window_mean",
+    "tcp_window_std",
+    "fragment_count",
+    "payload_mean",
+    "payload_std",
+    "payload_min",
+    "payload_max",
+    "retransmission_count",
+    "port_scan_score",
+    "sequential_port_ratio",
+    "unique_dst_ports",
+    "packet_iat_mean",
+    "packet_iat_std",
+    "packet_iat_max",
+)
+
+# Canonical model input feature order
+CANONICAL_MODEL_FEATURE_NAMES: tuple[str, ...] = CANONICAL_FLOW_FEATURE_NAMES
+
+
+# ---------------------------------------------------------------------------
+# FORBIDDEN FEATURE NAMES (ANTI-LEAKAGE)
+# ---------------------------------------------------------------------------
 # Fields that represent raw identifiers, ground-truth targets, or post-event stage outputs.
 # These MUST NEVER enter the model as input features.
 FORBIDDEN_FEATURE_NAMES: frozenset[str] = frozenset({
@@ -25,6 +90,8 @@ FORBIDDEN_FEATURE_NAMES: frozenset[str] = frozenset({
     "y_true",
     "target",
     "ground_truth",
+    "stage",
+    "is_malicious",
 })
 
 
