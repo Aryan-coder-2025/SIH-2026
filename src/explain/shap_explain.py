@@ -16,6 +16,9 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import numpy as np
 
+from src.config import get_temporal_config
+from src.schemas.features import CANONICAL_MODEL_FEATURE_NAMES, validate_feature_names
+
 
 # Canonical analyst terminology display mapping
 FEATURE_DISPLAY_MAP: Dict[str, Dict[str, str]] = {
@@ -286,7 +289,31 @@ class AttributionExplainer:
     """
 
     def __init__(self, feature_names: Optional[List[str]] = None):
-        self.feature_names = feature_names or list(FEATURE_DISPLAY_MAP.keys())
+        self.feature_names = feature_names or list(CANONICAL_MODEL_FEATURE_NAMES)
+        validate_feature_names(self.feature_names, expected_order=CANONICAL_MODEL_FEATURE_NAMES)
+
+    def _validate_names(self, names: Sequence[str]) -> list[str]:
+        return validate_feature_names(names, expected_order=CANONICAL_MODEL_FEATURE_NAMES)
+
+    def _validate_temporal_matrix(self, matrix: np.ndarray, names: Sequence[str]) -> None:
+        temporal_cfg = get_temporal_config()
+        expected_shape = (temporal_cfg.history_length, len(names))
+        if matrix.shape != expected_shape:
+            raise ValueError(
+                f"Attribution temporal matrix must have shape {expected_shape}, got {matrix.shape}"
+            )
+
+    def _validate_attribution_tensor(self, tensor: np.ndarray, names: Sequence[str]) -> None:
+        temporal_cfg = get_temporal_config()
+        expected_shape = (
+            temporal_cfg.forecast_horizon_windows,
+            temporal_cfg.history_length,
+            len(names),
+        )
+        if tensor.shape != expected_shape:
+            raise ValueError(
+                f"Attribution tensor must have shape {expected_shape}, got {tensor.shape}"
+            )
 
     def _sanitize_risk(self, risk: Any) -> float:
         """Sanitizes risk, preventing NaN / Inf / negative values."""
@@ -322,7 +349,9 @@ class AttributionExplainer:
         """
         risk = self._sanitize_risk(predicted_risk)
         urgency = self._get_urgency_level(risk)
-        names = feature_names or self.feature_names
+        names = self._validate_names(feature_names or self.feature_names)
+        if temporal_window_attributions is not None:
+            self._validate_temporal_matrix(np.asarray(temporal_window_attributions), names)
 
         feature_val_map: Dict[str, float] = {}
         if isinstance(attributions, dict):
@@ -416,8 +445,13 @@ class AttributionExplainer:
         Processes all 3 forecast horizons (+10s, +20s, +30s) and generates per-horizon
         explanations as well as a consolidated summary.
         """
-        names = feature_names or self.feature_names
-        horizon_seconds_list = [10, 20, 30]
+        names = self._validate_names(feature_names or self.feature_names)
+        temporal_cfg = get_temporal_config()
+        horizon_seconds_list = list(temporal_cfg.forecast_offsets_seconds)
+        if temporal_attribution_tensor is not None:
+            self._validate_attribution_tensor(np.asarray(temporal_attribution_tensor), names)
+        elif isinstance(attributions_by_horizon, np.ndarray) and attributions_by_horizon.ndim == 3:
+            self._validate_attribution_tensor(attributions_by_horizon, names)
 
         # Normalize risks
         risks: List[float] = []

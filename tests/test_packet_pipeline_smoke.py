@@ -138,7 +138,11 @@ def test_end_to_end_pipeline_smoke():
         # Assign synthetic target labels for sequence verification
         target_fused_df["label"] = [0.0 if i < 12 else 1.0 for i in range(num_windows)]
 
-        traffic_windows = fused_df_to_traffic_windows(target_fused_df, label_col="label")
+        traffic_windows = fused_df_to_traffic_windows(
+            target_fused_df,
+            label_col="label",
+            allow_prototype_partial_features=True,
+        )
         assert len(traffic_windows) == num_windows
         for tw in traffic_windows:
             assert isinstance(tw, TrafficWindow)

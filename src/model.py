@@ -3,6 +3,9 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
+from src.config import get_temporal_config
+from src.schemas.features import CANONICAL_MODEL_FEATURE_NAMES
+
 
 class WorldModel(nn.Module):
     """
@@ -29,6 +32,16 @@ class WorldModel(nn.Module):
         num_stages: int = 2,
     ):
         super().__init__()
+
+        temporal_cfg = get_temporal_config()
+        if input_size != len(CANONICAL_MODEL_FEATURE_NAMES):
+            raise ValueError(
+                f"WorldModel canonical input_size must be {len(CANONICAL_MODEL_FEATURE_NAMES)}, got {input_size}"
+            )
+        if horizon != temporal_cfg.forecast_horizon_windows:
+            raise ValueError(
+                f"WorldModel canonical horizon must be {temporal_cfg.forecast_horizon_windows}, got {horizon}"
+            )
 
         self.horizon = horizon
 

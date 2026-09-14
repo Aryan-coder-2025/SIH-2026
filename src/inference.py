@@ -17,20 +17,52 @@ import pandas as pd
 import torch
 
 try:
+    from src.config import get_temporal_config
     from src.model import WorldModel
+    from src.schemas.features import CANONICAL_MODEL_FEATURE_NAMES, validate_feature_names
 except ImportError:
+    from config import get_temporal_config  # type: ignore
     from model import WorldModel  # type: ignore
+    from schemas.features import CANONICAL_MODEL_FEATURE_NAMES, validate_feature_names  # type: ignore
 
 # ============================================================
 # CONFIG
 # ============================================================
 
 ARTIFACT_DIR = Path("artifacts")
-SEQUENCE_LENGTH = 10
-HORIZON = 3
+TEMPORAL_CONFIG = get_temporal_config()
+SEQUENCE_LENGTH = TEMPORAL_CONFIG.history_length
+HORIZON = TEMPORAL_CONFIG.forecast_horizon_windows
 
 ENTITY_COLUMN = "source_host"
 TIMESTAMP_COLUMN = "timestamp"
+
+
+def validate_checkpoint_contract(checkpoint: dict[str, Any], feature_order: Sequence[str]) -> None:
+    """
+    Validate checkpoint provenance against the canonical 41-feature inference contract.
+    """
+    canonical_order = list(CANONICAL_MODEL_FEATURE_NAMES)
+    validate_feature_names(feature_order, expected_order=canonical_order)
+
+    expected = {
+        "project_id": "SIH26153",
+        "feature_count": len(canonical_order),
+        "input_size": len(canonical_order),
+        "sequence_length": TEMPORAL_CONFIG.history_length,
+        "horizon": TEMPORAL_CONFIG.forecast_horizon_windows,
+        "forecast_offsets_seconds": list(TEMPORAL_CONFIG.forecast_offsets_seconds),
+    }
+    for key, expected_value in expected.items():
+        actual_value = checkpoint.get(key)
+        if actual_value != expected_value:
+            raise ValueError(
+                f"Checkpoint contract mismatch for '{key}': expected {expected_value}, got {actual_value}"
+            )
+
+    checkpoint_order = checkpoint.get("feature_order")
+    if checkpoint_order != canonical_order:
+        raise ValueError("Checkpoint feature_order does not match the canonical feature order")
 
 
 # ============================================================
@@ -52,6 +84,8 @@ def load_artifacts(artifact_dir: Path | str = ARTIFACT_DIR):
     with open(art_path / "feature_order.json", "r", encoding="utf-8") as f:
         feature_order = json.load(f)
 
+    validate_checkpoint_contract(checkpoint, feature_order)
+
     with open(art_path / "scaler.pkl", "rb") as f:
         scaler = pickle.load(f)
 
@@ -62,11 +96,11 @@ def load_artifacts(artifact_dir: Path | str = ARTIFACT_DIR):
             stage_classes = json.load(f)
 
     model = WorldModel(
-        input_size=checkpoint["input_size"],
+        input_size=len(CANONICAL_MODEL_FEATURE_NAMES),
         hidden_size=checkpoint.get("hidden_size", 128),
         num_layers=checkpoint.get("num_layers", 2),
         dropout=checkpoint.get("dropout", 0.2),
-        horizon=checkpoint.get("horizon", 3),
+        horizon=TEMPORAL_CONFIG.forecast_horizon_windows,
         num_stages=checkpoint.get("num_stages", len(stage_classes)),
     )
 
@@ -90,6 +124,14 @@ def prepare_input(
     """
     Extract the most recent sequence_length windows for source_host and scale.
     """
+    validate_feature_names(feature_order, expected_order=CANONICAL_MODEL_FEATURE_NAMES)
+    if len(feature_order) != 41:
+        raise ValueError(f"Canonical inference requires 41 features, got {len(feature_order)}")
+    if sequence_length != TEMPORAL_CONFIG.history_length:
+        raise ValueError(
+            f"Canonical inference requires sequence_length={TEMPORAL_CONFIG.history_length}, got {sequence_length}"
+        )
+
     if ENTITY_COLUMN not in df.columns:
         # Fallback to src_ip if source_host is not present
         if "src_ip" in df.columns:
@@ -133,8 +175,16 @@ def forecast(
     stage_classes: Sequence[str],
 ) -> tuple[np.ndarray, str, float]:
     """
-    Generate calibrated future risk probabilities and auxiliary stage prediction.
+    Generate sigmoid risk outputs and auxiliary stage prediction.
     """
+    if X.ndim != 3:
+        raise ValueError("Model input must have shape (batch, sequence_length, num_features)")
+    expected_shape = (TEMPORAL_CONFIG.history_length, len(CANONICAL_MODEL_FEATURE_NAMES))
+    if X.shape[1:] != expected_shape:
+        raise ValueError(
+            f"Canonical model input must have trailing shape {expected_shape}, got {X.shape[1:]}"
+        )
+
     X_tensor = torch.tensor(X, dtype=torch.float32)
 
     with torch.no_grad():
@@ -143,6 +193,10 @@ def forecast(
         stage_probabilities = torch.softmax(stage_logits, dim=1)
 
     risk = risk_probabilities[0].numpy()
+    if risk.shape[0] != TEMPORAL_CONFIG.forecast_horizon_windows:
+        raise ValueError(
+            f"Canonical forecast requires {TEMPORAL_CONFIG.forecast_horizon_windows} horizons, got {risk.shape[0]}"
+        )
     stage_idx = int(torch.argmax(stage_probabilities[0]).item())
     stage = stage_classes[stage_idx] if stage_idx < len(stage_classes) else "unknown"
     stage_conf = float(stage_probabilities[0][stage_idx].item())

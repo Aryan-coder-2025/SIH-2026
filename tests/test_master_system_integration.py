@@ -162,6 +162,9 @@ class TestMasterSystemIntegration:
             )
             # Assign future malicious risk target (0 for early windows, 1 for attack onset)
             target_df["label"] = [0.0 if w < 10 else 1.0 for w in range(len(target_df))]
+            for feature_name in CANONICAL_MODEL_FEATURE_NAMES:
+                if feature_name not in target_df.columns:
+                    target_df[feature_name] = 0.0
 
             traffic_windows = fused_df_to_traffic_windows(target_df, label_col="label")
             assert len(traffic_windows) == num_windows

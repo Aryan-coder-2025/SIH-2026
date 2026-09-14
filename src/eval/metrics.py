@@ -501,7 +501,8 @@ def evaluate_unseen_attacks(
     threshold: float = 0.50,
 ) -> dict[str, EvaluationResult]:
     """
-    Partition forecast evaluation between seen attack types and unseen / zero-day attacks.
+    Partition forecast evaluation between predeclared seen attack types and
+    held-out unseen attack types.
     """
     if len(records) != len(attack_labels):
         raise EvaluationError("records and attack_labels must have the same length.")

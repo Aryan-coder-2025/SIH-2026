@@ -396,7 +396,10 @@ def test_fused_df_to_canonical_traffic_window():
         }
     ])
 
-    traffic_windows = fused_df_to_traffic_windows(fused_df)
+    traffic_windows = fused_df_to_traffic_windows(
+        fused_df,
+        allow_prototype_partial_features=True,
+    )
     assert len(traffic_windows) == 1
 
     tw = traffic_windows[0]
@@ -436,7 +439,11 @@ def test_compatibility_with_canonical_sequences():
         })
 
     fused_df = pd.DataFrame(rows)
-    traffic_windows = fused_df_to_traffic_windows(fused_df, label_col="label")
+    traffic_windows = fused_df_to_traffic_windows(
+        fused_df,
+        label_col="label",
+        allow_prototype_partial_features=True,
+    )
 
     features = np.array([tw.features for tw in traffic_windows], dtype=np.float32)
     targets = np.array([tw.label for tw in traffic_windows], dtype=np.float32)

@@ -1,4 +1,8 @@
 {
+  "_provenance": {
+    "status": "MOCK / SYNTHETIC / INTEGRATION TEST ONLY",
+    "warning": "Do not present this artifact as real CSE-CIC-IDS2018 benchmark output or scientific validation."
+  },
   "host_id": "host-192-168-1-105",
   "window_id": 42,
   "timestamp": "2026-09-10T22:50:00Z",

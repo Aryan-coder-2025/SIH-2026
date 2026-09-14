@@ -13,7 +13,8 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 import numpy as np
 
 
-from src.schemas.features import CANONICAL_MODEL_FEATURE_NAMES
+from src.config import get_temporal_config
+from src.schemas.features import CANONICAL_MODEL_FEATURE_NAMES, validate_feature_names
 
 # Authoritative feature list aligning strictly with project-level canonical schema
 CANONICAL_FEATURES: List[str] = list(CANONICAL_MODEL_FEATURE_NAMES)
@@ -290,6 +291,12 @@ class EvidenceRuleEvaluator:
         Evaluates a 10-window temporal sequence (shape: [10, num_features] or list of 10 dicts).
         Preserves temporal context by recording the specific window offset where each heuristic triggered.
         """
+        names = validate_feature_names(
+            feature_names or CANONICAL_FEATURES,
+            expected_order=CANONICAL_MODEL_FEATURE_NAMES,
+        )
+        temporal_cfg = get_temporal_config()
+
         combined_profile = HostEvidenceProfile(
             host_id=str(host_id) if host_id else "host-unknown",
             window_id=base_window_id,
@@ -298,16 +305,27 @@ class EvidenceRuleEvaluator:
 
         windows: List[Dict[str, Any]] = []
         if isinstance(temporal_features, np.ndarray):
-            names = feature_names or CANONICAL_FEATURES[: temporal_features.shape[-1]]
+            expected_shape = (temporal_cfg.history_length, len(CANONICAL_FEATURES))
+            if temporal_features.shape != expected_shape:
+                raise ValueError(
+                    f"Temporal evidence features must have shape {expected_shape}, got {temporal_features.shape}"
+                )
             for t_idx in range(temporal_features.shape[0]):
                 w_dict = {names[i]: float(temporal_features[t_idx, i]) for i in range(min(len(names), temporal_features.shape[1]))}
                 windows.append(w_dict)
         elif isinstance(temporal_features, list):
+            if len(temporal_features) != temporal_cfg.history_length:
+                raise ValueError(
+                    f"Temporal evidence requires {temporal_cfg.history_length} windows, got {len(temporal_features)}"
+                )
             for item in temporal_features:
                 if isinstance(item, dict):
                     windows.append(item)
                 elif isinstance(item, (list, tuple, np.ndarray)):
-                    names = feature_names or CANONICAL_FEATURES[: len(item)]
+                    if len(item) != len(CANONICAL_FEATURES):
+                        raise ValueError(
+                            f"Temporal evidence requires {len(CANONICAL_FEATURES)} features, got {len(item)}"
+                        )
                     w_dict = {names[i]: float(item[i]) for i in range(min(len(names), len(item)))}
                     windows.append(w_dict)
 

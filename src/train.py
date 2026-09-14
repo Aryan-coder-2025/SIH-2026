@@ -14,13 +14,17 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from torch.utils.data import TensorDataset, DataLoader
 
 try:
-    from src.sequence_builder import build_sequences
+    from src.config import get_temporal_config
     from src.model import WorldModel
-    from src.schemas.features import FORBIDDEN_FEATURE_NAMES, validate_feature_names
+    from src.schemas.features import CANONICAL_MODEL_FEATURE_NAMES, validate_feature_names
+    from src.temporal.sequences import build_sequences_from_dataframe
+    from src.temporal.split import temporal_split_by_time
 except ImportError:
-    from sequence_builder import build_sequences  # type: ignore
+    from config import get_temporal_config  # type: ignore
     from model import WorldModel  # type: ignore
-    from schemas.features import FORBIDDEN_FEATURE_NAMES, validate_feature_names  # type: ignore
+    from schemas.features import CANONICAL_MODEL_FEATURE_NAMES, validate_feature_names  # type: ignore
+    from temporal.sequences import build_sequences_from_dataframe  # type: ignore
+    from temporal.split import temporal_split_by_time  # type: ignore
 
 
 # ============================================================
@@ -35,8 +39,9 @@ DATA_PATH = Path(
 
 ARTIFACT_DIR = Path("artifacts")
 
-SEQUENCE_LENGTH = 10
-HORIZON = 3
+TEMPORAL_CONFIG = get_temporal_config()
+SEQUENCE_LENGTH = TEMPORAL_CONFIG.history_length
+HORIZON = TEMPORAL_CONFIG.forecast_horizon_windows
 
 BATCH_SIZE = 64
 EPOCHS = 30
@@ -80,49 +85,53 @@ def get_device():
     return torch.device("cpu")
 
 
-# ============================================================
-# TEMPORAL SPLIT
-# ============================================================
+def select_canonical_model_features(df: pd.DataFrame) -> list[str]:
+    """
+    Return the authoritative 41-feature model order without dataframe inference.
+    """
+    feature_columns = list(CANONICAL_MODEL_FEATURE_NAMES)
+    validate_feature_names(
+        feature_columns,
+        expected_order=CANONICAL_MODEL_FEATURE_NAMES,
+    )
+    if len(feature_columns) != 41:
+        raise ValueError(
+            f"Canonical model feature contract must contain 41 features, got {len(feature_columns)}"
+        )
 
-def temporal_split(
+    missing = [col for col in feature_columns if col not in df.columns]
+    if missing:
+        raise ValueError(f"Missing canonical model feature column(s): {missing}")
+
+    return feature_columns
+
+
+def split_dataframe_temporally(
     df: pd.DataFrame,
     train_ratio: float = 0.7,
     validation_ratio: float = 0.15,
 ):
+    """
+    DataFrame adapter for src.temporal.split.temporal_split_by_time.
 
-    df = df.sort_values(
-        TIMESTAMP_COLUMN
-    ).reset_index(drop=True)
+    Training must split raw windows before sequence construction and must not
+    maintain an independent temporal split implementation.
+    """
+    if TIMESTAMP_COLUMN not in df.columns:
+        raise ValueError(f"Missing timestamp column: {TIMESTAMP_COLUMN}")
 
-    n = len(df)
-
-    train_end = int(
-        n * train_ratio
+    split = temporal_split_by_time(
+        df.to_dict("records"),
+        train_ratio=train_ratio,
+        val_ratio=validation_ratio,
+        timestamp_extractor=lambda row: pd.Timestamp(row[TIMESTAMP_COLUMN]).to_pydatetime(),
     )
-
-    validation_end = int(
-        n * (
-            train_ratio
-            + validation_ratio
-        )
-    )
-
-    train_df = df.iloc[
-        :train_end
-    ].copy()
-
-    validation_df = df.iloc[
-        train_end:validation_end
-    ].copy()
-
-    test_df = df.iloc[
-        validation_end:
-    ].copy()
 
     return (
-        train_df,
-        validation_df,
-        test_df
+        pd.DataFrame(split.train),
+        pd.DataFrame(split.val),
+        pd.DataFrame(split.test),
+        split,
     )
 
 
@@ -367,20 +376,7 @@ def main():
     # FEATURES
     # --------------------------------------------------------
 
-    excluded_columns = {
-        ENTITY_COLUMN,
-        TIMESTAMP_COLUMN,
-        RISK_COLUMN,
-        STAGE_COLUMN,
-    } | set(FORBIDDEN_FEATURE_NAMES)
-
-    feature_columns = [
-        col
-        for col in df.columns
-        if col not in excluded_columns
-        and pd.api.types.is_numeric_dtype(df[col])
-    ]
-    feature_columns = validate_feature_names(feature_columns)
+    feature_columns = select_canonical_model_features(df)
 
     print(
         "Number of features:",
@@ -396,8 +392,8 @@ def main():
     # TEMPORAL SPLIT
     # --------------------------------------------------------
 
-    train_df, validation_df, test_df = (
-        temporal_split(df)
+    train_df, validation_df, test_df, split_info = (
+        split_dataframe_temporally(df)
     )
 
     print(
@@ -424,7 +420,7 @@ def main():
     )
 
     X_train, y_train_risk, y_train_stage = (
-        build_sequences(
+        build_sequences_from_dataframe(
             train_df,
             feature_columns,
             sequence_length=SEQUENCE_LENGTH,
@@ -437,7 +433,7 @@ def main():
     )
 
     X_validation, y_validation_risk, y_validation_stage = (
-        build_sequences(
+        build_sequences_from_dataframe(
             validation_df,
             feature_columns,
             sequence_length=SEQUENCE_LENGTH,
@@ -450,7 +446,7 @@ def main():
     )
 
     X_test, y_test_risk, y_test_stage = (
-        build_sequences(
+        build_sequences_from_dataframe(
             test_df,
             feature_columns,
             sequence_length=SEQUENCE_LENGTH,
@@ -657,6 +653,15 @@ def main():
             "model_state_dict":
                 model.state_dict(),
 
+            "project_id":
+                "SIH26153",
+
+            "feature_order":
+                feature_columns,
+
+            "feature_count":
+                len(feature_columns),
+
             "input_size":
                 len(feature_columns),
 
@@ -669,8 +674,31 @@ def main():
             "dropout":
                 DROPOUT,
 
+            "sequence_length":
+                SEQUENCE_LENGTH,
+
             "horizon":
                 HORIZON,
+
+            "forecast_offsets_seconds":
+                list(TEMPORAL_CONFIG.forecast_offsets_seconds),
+
+            "dataset":
+                "CSE-CIC-IDS2018",
+
+            "split_cutoffs": {
+                "train_end_time": split_info.train_end_time.isoformat()
+                if split_info.train_end_time is not None else None,
+                "val_start_time": split_info.val_start_time.isoformat()
+                if split_info.val_start_time is not None else None,
+                "val_end_time": split_info.val_end_time.isoformat()
+                if split_info.val_end_time is not None else None,
+                "test_start_time": split_info.test_start_time.isoformat()
+                if split_info.test_start_time is not None else None,
+            },
+
+            "seed":
+                SEED,
 
             "num_stages":
                 num_stages,
@@ -744,11 +772,17 @@ def main():
     # --------------------------------------------------------
 
     metadata = {
+        "project_id":
+            "SIH26153",
+
         "dataset":
             "CSE-CIC-IDS2018",
 
+        "dataset_status":
+            "Configured dataset identity only; predictive performance is not established until a real training/evaluation run is completed.",
+
         "window_seconds":
-            10,
+            TEMPORAL_CONFIG.window_seconds,
 
         "sequence_length":
             SEQUENCE_LENGTH,
@@ -756,11 +790,35 @@ def main():
         "forecast_horizon":
             HORIZON,
 
+        "forecast_offsets_seconds":
+            list(TEMPORAL_CONFIG.forecast_offsets_seconds),
+
         "entity":
             ENTITY_COLUMN,
 
         "feature_count":
             len(feature_columns),
+
+        "feature_order":
+            feature_columns,
+
+        "split_cutoffs": {
+            "train_end_time": split_info.train_end_time.isoformat()
+            if split_info.train_end_time is not None else None,
+            "val_start_time": split_info.val_start_time.isoformat()
+            if split_info.val_start_time is not None else None,
+            "val_end_time": split_info.val_end_time.isoformat()
+            if split_info.val_end_time is not None else None,
+            "test_start_time": split_info.test_start_time.isoformat()
+            if split_info.test_start_time is not None else None,
+        },
+
+        "model_architecture": {
+            "hidden_size": HIDDEN_SIZE,
+            "num_layers": NUM_LAYERS,
+            "dropout": DROPOUT,
+            "num_stages": num_stages,
+        },
 
         "seed":
             SEED,

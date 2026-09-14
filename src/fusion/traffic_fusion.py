@@ -201,6 +201,7 @@ def fused_df_to_traffic_windows(
     fused_df: pd.DataFrame,
     label_col: str | None = None,
     feature_names: Sequence[str] | None = None,
+    allow_prototype_partial_features: bool = False,
 ) -> list[TrafficWindow]:
     """
     Convert a fused feature DataFrame into canonical TrafficWindow objects.
@@ -218,47 +219,72 @@ def fused_df_to_traffic_windows(
         return []
 
     # Normalize known feature aliases if present
-    df = fused_df.rename(columns={k: v for k, v in FEATURE_ALIASES.items() if k in fused_df.columns})
+    df = fused_df.rename(
+        columns={
+            k: v
+            for k, v in FEATURE_ALIASES.items()
+            if k in fused_df.columns and v not in fused_df.columns
+        }
+    )
 
     # Resolve authoritative active features
     if feature_names is not None:
-        active_features = validate_feature_names(feature_names)
+        active_features = validate_feature_names(
+            feature_names,
+            expected_order=CANONICAL_MODEL_FEATURE_NAMES
+            if not allow_prototype_partial_features
+            else None,
+        )
     else:
         all_cols = set(df.columns)
-        has_packet = any(c in all_cols for c in CANONICAL_PACKET_FEATURE_NAMES)
-        has_flow = any(c in all_cols for c in CANONICAL_FLOW_FEATURE_NAMES)
+        missing_canonical = [c for c in CANONICAL_MODEL_FEATURE_NAMES if c not in all_cols]
 
-        if has_packet and has_flow:
-            # Full fused flow + packet pipeline: authoritative 41 features
+        if not missing_canonical:
             active_features = list(CANONICAL_MODEL_FEATURE_NAMES)
-        elif has_flow:
-            active_features = list(CANONICAL_FLOW_FEATURE_NAMES)
-        elif has_packet:
-            active_features = list(CANONICAL_PACKET_FEATURE_NAMES)
-        else:
-            metadata_cols = {
-                "src_ip",
-                "dst_ip",
-                "src_port",
-                "dst_port",
-                "window_id",
-                "window_start",
-                "window_end",
-                "timestamp",
-                "flow_id",
-                "label",
-                "target",
-                "attack_type",
-                "y_true",
-            }
-            if label_col:
-                metadata_cols.add(label_col)
+        elif allow_prototype_partial_features:
+            has_packet = any(c in all_cols for c in CANONICAL_PACKET_FEATURE_NAMES)
+            has_flow = any(c in all_cols for c in CANONICAL_FLOW_FEATURE_NAMES)
 
-            numeric_cols = [
-                c for c in df.columns
-                if c not in metadata_cols and pd.api.types.is_numeric_dtype(df[c])
-            ]
-            active_features = validate_feature_names(numeric_cols)
+            if has_flow and not has_packet:
+                active_features = list(CANONICAL_FLOW_FEATURE_NAMES)
+            elif has_packet and not has_flow:
+                active_features = list(CANONICAL_PACKET_FEATURE_NAMES)
+            else:
+                metadata_cols = {
+                    "src_ip",
+                    "dst_ip",
+                    "src_port",
+                    "dst_port",
+                    "window_id",
+                    "window_start",
+                    "window_end",
+                    "timestamp",
+                    "flow_id",
+                    "label",
+                    "target",
+                    "attack_type",
+                    "y_true",
+                }
+                if label_col:
+                    metadata_cols.add(label_col)
+
+                numeric_cols = [
+                    c for c in df.columns
+                    if c not in metadata_cols and pd.api.types.is_numeric_dtype(df[c])
+                ]
+                active_features = validate_feature_names(numeric_cols)
+        else:
+            missing_flow = [c for c in CANONICAL_FLOW_FEATURE_NAMES if c not in all_cols]
+            missing_packet = [c for c in CANONICAL_PACKET_FEATURE_NAMES if c not in all_cols]
+            raise ValueError(
+                "Canonical forecasting requires all 41 flow+packet features. "
+                f"Missing flow features: {missing_flow}; missing packet features: {missing_packet}"
+            )
+
+    if not allow_prototype_partial_features:
+        validate_feature_names(active_features, expected_order=CANONICAL_MODEL_FEATURE_NAMES)
+        if len(active_features) != 41:
+            raise ValueError(f"Canonical forecasting requires 41 features, got {len(active_features)}")
 
     windows: list[TrafficWindow] = []
     col_set = set(df.columns)

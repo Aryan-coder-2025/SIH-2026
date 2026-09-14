@@ -131,7 +131,7 @@ def test_lead_time_evaluation():
 
 
 def test_unseen_attack_evaluation():
-    """Test partitioning between known attack classes and unseen/zero-day attacks."""
+    """Test partitioning between known attack classes and held-out unseen attacks."""
     t_base = datetime(2026, 9, 10, 12, 0, 0, tzinfo=timezone.utc)
 
     records = [
