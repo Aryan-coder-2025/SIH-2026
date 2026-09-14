@@ -2,9 +2,12 @@
 
 Owner: Ankit (Evaluation + Baselines + Dashboard/QA)
 
-Status: **Part B — baseline framework only.** Lead time, early warning
-rate, unseen-attack evaluation, ablation studies, and the dashboard are
-still not implemented (unchanged from Part A's scope note).
+Status: **Part B — baseline framework, now integrated with the
+forecast-aware evaluation layer** (`docs/07_EVALUATION_PROTOCOL.md` §11).
+Lead time, early warning rate, unseen-attack evaluation, and ablation
+studies are now implemented as part of that layer — see §11.8-§11.12
+there for what they do and how they relate to these baselines. The
+Streamlit dashboard is still not implemented.
 
 ## 1. Purpose
 
@@ -59,6 +62,11 @@ labels = baseline.predict(X_test)        # binary, via risk_to_label()
   expose the usual scikit-learn hyperparameters as constructor arguments
   (`C`/`max_iter` for Logistic Regression; `n_estimators`, `max_depth`,
   `min_samples_leaf` for Random Forest) rather than hard-coding them.
+- The `threshold=0.70` constructor default is a starting point for
+  ad-hoc use, not a calibrated value. For a real run, select it on
+  validation data via `src.eval.threshold.select_threshold` (see
+  `docs/07_EVALUATION_PROTOCOL.md` §11.5) and pass the frozen result to
+  `predict(X, threshold=selected_threshold)`.
 - Binary conversion reuses `src/eval/metrics.risk_to_label`, so a
   baseline's own `.predict()` and a caller manually thresholding
   `.predict_risk()` output always agree.
@@ -86,13 +94,15 @@ only the arrays passed in change.
 
 ## 5. Temporal split expectations
 
-No baseline in this package performs a train/test split. Callers must
-supply an already temporally-split `X_train`/`y_train` (earlier time) and
-`X_test`/`y_test` (later time), produced upstream via a **global
-timestamp cutoff** — never `sklearn.train_test_split(..., shuffle=True)`
-and never a per-host split that ignores the global timeline. This keeps
-the split logic in one place (upstream, once implemented) instead of
-duplicated per baseline.
+No baseline in this package performs a train/test split itself. That
+split logic now lives in one place —
+`src.eval.temporal_split.temporal_train_validation_test_split` (see
+`docs/07_EVALUATION_PROTOCOL.md` §11.4) — which splits by a **global
+timestamp cutoff** across every host into TRAIN / VALIDATION / FINAL
+TEST, never `shuffle=True` and never a per-host split. Callers build
+`X_train`/`y_train`, `X_val`/`y_val`, `X_test`/`y_test` via that utility
+(or an equivalent already-split source) and pass them to a baseline's
+`fit`/`predict` as usual.
 
 ## 6. Preprocessing expectations
 
@@ -145,16 +155,48 @@ in those tests (e.g. an F1 sanity bound) describe test-fixture behaviour
 only and are **not** experimental results on real network traffic; no
 benchmark numbers are claimed here.
 
-## 11. Not yet implemented
+## 11. Feature-history fairness for LR/RF (implemented)
 
-- Real feature-matrix integration (depends on Shaurya/Aman's fusion
-  output and the frozen data/model contracts)
-- Lead-time evaluation, early-warning rate, unseen-attack evaluation,
-  ablation studies (`src/eval/lead_time.py`, `unseen_attack.py`,
-  `ablation.py`)
-- Timestamp-based train/test split utility (deferred until the
-  project's data contract for timestamps is concrete — see Part A doc
-  §7 and this doc §5)
+The future LSTM/world model sees the full 10-window history per
+prediction. Comparing it against LR/RF fit only on the current window
+would give the baselines a strictly smaller information budget — an
+unfair comparison. `src/baseline/temporal_features.py::flatten_temporal_history`
+takes a `(n_samples, n_windows, n_features)` history array (oldest window
+first) and deterministically reshapes it into
+`(n_samples, n_windows * n_features)` — `[features_t-9, ..., features_t]`
+— which `LogisticRegressionBaseline`/`RandomForestBaseline` then consume
+exactly like any other `X`. `build_flattened_feature_names` produces the
+matching column names. See `docs/07_EVALUATION_PROTOCOL.md` §11.14 for
+the full rationale and `tests/test_temporal_features.py` for the
+determinism/ordering tests.
+
+## 12. Feature schema (implemented)
+
+Both `LogisticRegressionBaseline` and `RandomForestBaseline` accept an
+optional `feature_schema` constructor argument
+(`src.eval.feature_schema.FeatureSchema`, default `None`, fully backward
+compatible). When set, a pandas DataFrame passed to `fit()` or
+`predict()`/`predict_risk()` with the wrong column names or order raises
+`BaselineError` — the schema-mismatch failure mode described in the
+project plan (training on `[bytes, packets, ttl, syn]`, predicting on
+`[packets, bytes, syn, ttl]`) fails loudly instead of silently producing
+garbage. See `docs/07_EVALUATION_PROTOCOL.md` §11.13 and
+`tests/test_feature_schema.py`.
+
+## 13. What tests use — implemented, no dataset dependency
+
+Confirmed: `tests/test_temporal_features.py` and `tests/test_feature_schema.py`
+follow the same synthetic-data convention as §10 — deterministic
+`numpy.random.default_rng(seed=42)` fixtures, no real dataset, no claimed
+benchmark numbers.
+
+## 14. Not yet implemented
+
+- Real feature-matrix integration (depends on Shaurya/Aman's flow+packet
+  fusion output and the frozen data/model contracts)
 - Serialized baseline artifacts (`artifacts/baseline_lr.pkl`,
   `artifacts/baseline_rf.pkl`)
 - Streamlit dashboard
+- Probability calibration for `predict_risk()` output — see
+  `docs/07_EVALUATION_PROTOCOL.md` §11.11; risk scores are explicitly
+  not claimed to be calibrated probabilities

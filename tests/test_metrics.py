@@ -251,6 +251,41 @@ def test_evaluation_result_to_dict_shape():
         "recall",
         "f1",
         "fpr",
+        "accuracy",
+        "specificity",
         "confusion_matrix",
     }
     assert set(result_dict["confusion_matrix"].keys()) == {"tn", "fp", "fn", "tp"}
+
+
+# ----------------------------------------------------------------------
+# Extra: accuracy and specificity (secondary metrics)
+# ----------------------------------------------------------------------
+def test_accuracy_and_specificity_perfect_predictions():
+    result = evaluate_predictions([0, 1, 0, 1], [0, 1, 0, 1])
+    assert result.accuracy == 1.0
+    assert result.specificity == 1.0
+
+
+def test_accuracy_and_specificity_manual_verification():
+    # TN=2, FP=2, FN=1, TP=3 (same fixture as the mixed-predictions test)
+    y_true = [0, 1, 0, 1, 1, 0, 1, 0]
+    y_pred = [0, 1, 1, 1, 0, 0, 1, 1]
+
+    result = evaluate_predictions(y_true, y_pred)
+
+    assert result.accuracy == pytest.approx((3 + 2) / 8)
+    assert result.specificity == pytest.approx(2 / (2 + 2))
+    # specificity is exactly 1 - fpr
+    assert result.specificity == pytest.approx(1 - result.fpr)
+
+
+def test_specificity_zero_division_policy_matches_fpr():
+    # No negative ground truth at all -> FP+TN == 0 -> both default to 0.0
+    y_true = [1, 1, 1]
+    y_pred = [1, 0, 1]
+
+    result = evaluate_predictions(y_true, y_pred)
+
+    assert result.fpr == 0.0
+    assert result.specificity == 0.0

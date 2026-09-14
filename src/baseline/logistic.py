@@ -14,6 +14,7 @@ from src.baseline._validation import (
     validate_predict_input,
     validate_threshold,
 )
+from src.eval.feature_schema import FeatureSchema, FeatureSchemaError
 from src.eval.metrics import risk_to_label
 
 
@@ -50,6 +51,16 @@ class LogisticRegressionBaseline:
     already-temporally-split `X_train`/`y_train` (earlier time) and
     `X_test`/`y_test` (later time) built via a global timestamp cutoff —
     never `sklearn.model_selection.train_test_split(..., shuffle=True)`.
+
+    FEATURE SCHEMA (optional)
+    ---------------------------
+    Passing `feature_schema` (a `src.eval.feature_schema.FeatureSchema`)
+    additionally validates, at both `fit()` and `predict()`/
+    `predict_risk()`, that a pandas DataFrame's columns match the
+    expected feature names AND order exactly — not just the column
+    count (which is already checked either way via
+    `expected_n_features`). This is optional and backward compatible:
+    omitting it (the default) preserves the original count-only check.
     """
 
     def __init__(
@@ -58,9 +69,11 @@ class LogisticRegressionBaseline:
         threshold: float = 0.70,
         max_iter: int = 1000,
         C: float = 1.0,
+        feature_schema: Optional[FeatureSchema] = None,
     ) -> None:
         self.random_state = random_state
         self.threshold = validate_threshold(threshold)
+        self.feature_schema = feature_schema
         self._scaler = StandardScaler()
         self._model = LogisticRegression(
             random_state=random_state, max_iter=max_iter, C=C
@@ -68,8 +81,22 @@ class LogisticRegressionBaseline:
         self._n_features: Optional[int] = None
         self._fitted = False
 
+    def _check_schema(self, X: ArrayLike) -> None:
+        if self.feature_schema is not None and hasattr(X, "columns"):
+            try:
+                self.feature_schema.validate_dataframe_columns(X)
+            except FeatureSchemaError as exc:
+                raise BaselineError(str(exc)) from exc
+
     def fit(self, X_train: ArrayLike, y_train: LabelLike) -> "LogisticRegressionBaseline":
+        self._check_schema(X_train)
         X_arr, y_arr = validate_fit_inputs(X_train, y_train)
+
+        if self.feature_schema is not None:
+            try:
+                self.feature_schema.validate_array(X_arr, "X_train")
+            except FeatureSchemaError as exc:
+                raise BaselineError(str(exc)) from exc
 
         if len(np.unique(y_arr)) < 2:
             raise BaselineError(
@@ -92,6 +119,7 @@ class LogisticRegressionBaseline:
     def predict_risk(self, X: ArrayLike) -> np.ndarray:
         """Return predicted probability of the malicious/future-risk class."""
         self._check_fitted()
+        self._check_schema(X)
         X_arr = validate_predict_input(X, expected_n_features=self._n_features)
         X_scaled = self._scaler.transform(X_arr)  # transform only, never fit
         return self._model.predict_proba(X_scaled)[:, 1]

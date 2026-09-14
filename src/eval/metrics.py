@@ -57,6 +57,8 @@ class EvaluationResult:
     recall: float
     f1: float
     fpr: float
+    accuracy: float
+    specificity: float
     confusion_matrix: ConfusionMatrix
 
     def to_dict(self) -> dict[str, object]:
@@ -65,6 +67,8 @@ class EvaluationResult:
             "recall": self.recall,
             "f1": self.f1,
             "fpr": self.fpr,
+            "accuracy": self.accuracy,
+            "specificity": self.specificity,
             "confusion_matrix": self.confusion_matrix.to_dict(),
         }
 
@@ -257,6 +261,48 @@ def false_positive_rate(cm: ConfusionMatrix) -> float:
     return cm.fp / denominator
 
 
+def accuracy(cm: ConfusionMatrix) -> float:
+    """
+    (TP + TN) / (TP + TN + FP + FN).
+
+    SECONDARY METRIC ONLY. Class imbalance (expected in this project --
+    malicious windows are typically a minority of traffic) can make
+    accuracy look deceptively high even when Recall/F1/FPR reveal a
+    model that misses most attacks. Precision/Recall/F1/FPR remain the
+    primary metrics; do not report accuracy alone as evidence of success
+    (the project's own rule: "Do not claim success using accuracy alone").
+
+    The denominator here is the total sample count, which
+    `confusion_matrix()` already guarantees is non-zero (empty input is
+    rejected upstream) -- so this is always well-defined in practice; the
+    zero-guard below exists only for direct, unusual construction of a
+    ConfusionMatrix with all-zero counts.
+    """
+    denominator = cm.tp + cm.tn + cm.fp + cm.fn
+    if denominator == 0:
+        return 0.0
+    return (cm.tp + cm.tn) / denominator
+
+
+def specificity(cm: ConfusionMatrix) -> float:
+    """
+    TN / (TN + FP), i.e. the True Negative Rate = 1 - FPR.
+
+    Provided alongside FPR for readability in reports (some readers find
+    "95% specificity" clearer than "5% FPR" or vice versa; both describe
+    the same underlying quantity). Same zero-division policy as
+    `false_positive_rate`: returns 0.0 if there is no negative ground
+    truth (TN + FP == 0). The raw TN/FP counts remain available on
+    `cm` itself for callers who need to distinguish "0.0 because there
+    were no negatives to be specific about" from "0.0 because every
+    negative was a false positive."
+    """
+    denominator = cm.tn + cm.fp
+    if denominator == 0:
+        return 0.0
+    return cm.tn / denominator
+
+
 # ----------------------------------------------------------------------
 # Aggregate evaluators
 # ----------------------------------------------------------------------
@@ -273,6 +319,8 @@ def evaluate_predictions(y_true: ArrayLike, y_pred: ArrayLike) -> EvaluationResu
         recall=recall(cm),
         f1=f1_score(cm),
         fpr=false_positive_rate(cm),
+        accuracy=accuracy(cm),
+        specificity=specificity(cm),
         confusion_matrix=cm,
     )
 
@@ -302,10 +350,12 @@ if __name__ == "__main__":
     result = evaluate_risk(demo_y_true, demo_risk, threshold=0.70)
 
     print("=== Evaluation Smoke Test ===")
-    print(f"Precision: {result.precision:.2f}")
-    print(f"Recall:    {result.recall:.2f}")
-    print(f"F1:        {result.f1:.2f}")
-    print(f"FPR:       {result.fpr:.2f}")
+    print(f"Precision:   {result.precision:.2f}")
+    print(f"Recall:      {result.recall:.2f}")
+    print(f"F1:          {result.f1:.2f}")
+    print(f"FPR:         {result.fpr:.2f}")
+    print(f"Accuracy:    {result.accuracy:.2f}")
+    print(f"Specificity: {result.specificity:.2f}")
     print()
     print(f"TN: {result.confusion_matrix.tn}")
     print(f"FP: {result.confusion_matrix.fp}")

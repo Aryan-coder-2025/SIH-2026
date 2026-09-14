@@ -391,6 +391,8 @@ def test_full_pipeline_features_to_baseline_to_evaluation():
         "recall",
         "f1",
         "fpr",
+        "accuracy",
+        "specificity",
         "confusion_matrix",
     }
 
