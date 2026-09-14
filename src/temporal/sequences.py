@@ -119,7 +119,7 @@ def build_sequences(
     source_hosts: Sequence[str] | np.ndarray | None = None,
     window_seconds: int | None = None,
     config: dict[str, Any] | TemporalConfig | None = None,
-    strict_continuity: bool = False,
+    strict_continuity: bool = True,
     allow_synthetic_fallbacks: bool = False,
     return_metadata: bool = False,
 ) -> tuple[np.ndarray, np.ndarray] | TemporalSequenceBatch:
@@ -372,7 +372,7 @@ def build_sequences_from_windows(
     windows: Sequence[TrafficWindow],
     *,
     config: dict[str, Any] | TemporalConfig | None = None,
-    strict_continuity: bool = False,
+    strict_continuity: bool = True,
     return_metadata: bool = True,
 ) -> TemporalSequenceBatch | tuple[np.ndarray, np.ndarray]:
     """
@@ -442,6 +442,7 @@ def build_sequences_from_dataframe(
     timestamp_column: str = "timestamp",
     risk_column: str = "is_malicious",
     stage_column: str = "stage",
+    strict_continuity: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Authoritative DataFrame adapter for temporal sequence construction.
@@ -458,6 +459,8 @@ def build_sequences_from_dataframe(
         y_stage: shape (samples,)
     """
     cleaned_features = validate_feature_names(feature_columns)
+    temporal_cfg = get_temporal_config()
+    expected_step = timedelta(seconds=temporal_cfg.window_seconds)
 
     required_columns = (
         [entity_column, timestamp_column, risk_column]
@@ -480,6 +483,18 @@ def build_sequences_from_dataframe(
 
     for _, group in df_clean.groupby(entity_column, sort=False):
         group_sorted = group.sort_values(timestamp_column).reset_index(drop=True)
+
+        if strict_continuity:
+            times = [normalize_to_utc(ts.to_pydatetime() if isinstance(ts, pd.Timestamp) else ts)
+                     for ts in group_sorted[timestamp_column]]
+            for idx in range(1, len(times)):
+                actual_step = times[idx] - times[idx - 1]
+                if actual_step != expected_step:
+                    raise ValueError(
+                        f"Temporal discontinuity detected for host '{group_sorted[entity_column].iloc[0]}': "
+                        f"expected {times[idx - 1] + expected_step}, got {times[idx]} "
+                        f"(gap of {actual_step.total_seconds()}s)"
+                    )
 
         feat_vals = group_sorted[cleaned_features].to_numpy(dtype=np.float32)
         risk_vals = group_sorted[risk_column].to_numpy(dtype=np.float32)

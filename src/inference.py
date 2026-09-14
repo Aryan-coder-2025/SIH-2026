@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import pickle
 import sys
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -120,9 +121,15 @@ def prepare_input(
     feature_order: list[str],
     scaler: Any,
     sequence_length: int = SEQUENCE_LENGTH,
+    allow_compatibility_fallbacks: bool = False,
 ) -> tuple[np.ndarray, pd.DataFrame]:
     """
-    Extract the most recent sequence_length windows for source_host and scale.
+    Extract the most recent canonical windows for source_host and scale.
+
+    By default this is the strict scientific inference path: source_host and
+    timestamp columns are required, duplicate host/timestamp windows are rejected,
+    and the most recent 10 windows must be exactly 10 seconds apart. Set
+    allow_compatibility_fallbacks=True only for legacy/prototype adapters.
     """
     validate_feature_names(feature_order, expected_order=CANONICAL_MODEL_FEATURE_NAMES)
     if len(feature_order) != 41:
@@ -133,13 +140,19 @@ def prepare_input(
         )
 
     if ENTITY_COLUMN not in df.columns:
-        # Fallback to src_ip if source_host is not present
-        if "src_ip" in df.columns:
+        if allow_compatibility_fallbacks and "src_ip" in df.columns:
             entity_col = "src_ip"
         else:
-            raise ValueError(f"Missing entity column: {ENTITY_COLUMN}")
+            raise ValueError(
+                f"Canonical inference requires entity column '{ENTITY_COLUMN}'"
+            )
     else:
         entity_col = ENTITY_COLUMN
+
+    if TIMESTAMP_COLUMN not in df.columns:
+        raise ValueError(
+            f"Canonical inference requires timestamp column '{TIMESTAMP_COLUMN}'"
+        )
 
     host_df = df[df[entity_col] == source_host].copy()
 
@@ -149,15 +162,31 @@ def prepare_input(
             f"Found {len(host_df)}."
         )
 
-    if TIMESTAMP_COLUMN in host_df.columns:
-        host_df[TIMESTAMP_COLUMN] = pd.to_datetime(host_df[TIMESTAMP_COLUMN])
-        host_df = host_df.sort_values(TIMESTAMP_COLUMN)
+    host_df[TIMESTAMP_COLUMN] = pd.to_datetime(host_df[TIMESTAMP_COLUMN], utc=True)
+    if host_df[TIMESTAMP_COLUMN].isna().any():
+        raise ValueError("Canonical inference requires valid timestamps for every host window")
+    if host_df.duplicated(subset=[entity_col, TIMESTAMP_COLUMN]).any():
+        raise ValueError(
+            f"Duplicate inference window detected for host '{source_host}'"
+        )
+    host_df = host_df.sort_values(TIMESTAMP_COLUMN)
 
     missing_features = [f for f in feature_order if f not in host_df.columns]
     if missing_features:
         raise ValueError(f"Missing features: {missing_features}")
 
     recent = host_df.tail(sequence_length)
+    expected_step = timedelta(seconds=TEMPORAL_CONFIG.window_seconds)
+    recent_times = recent[TIMESTAMP_COLUMN].tolist()
+    for idx in range(1, len(recent_times)):
+        actual_step = recent_times[idx] - recent_times[idx - 1]
+        if actual_step != expected_step:
+            raise ValueError(
+                f"Temporal discontinuity detected for host '{source_host}': "
+                f"expected {recent_times[idx - 1] + expected_step}, got {recent_times[idx]} "
+                f"(gap of {actual_step.total_seconds()}s)"
+            )
+
     X = recent[feature_order].to_numpy(dtype=np.float32)
     X_scaled = scaler.transform(X)
     X_batch = np.expand_dims(X_scaled, axis=0)

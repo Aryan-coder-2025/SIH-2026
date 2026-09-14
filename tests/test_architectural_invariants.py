@@ -420,8 +420,17 @@ def test_invariant_29_looks_valid_individually_but_has_timeline_gap():
         assert w.source_host == "host_A"
 
     # Sequence builder must recognize the gap and not compress the timeline
-    batch = build_sequences_from_windows(windows, return_metadata=True)
+    # 1. By default, strict continuity rejects the 40-minute gap with ValueError
+    with pytest.raises(ValueError, match="Temporal discontinuity detected"):
+        build_sequences_from_windows(windows, return_metadata=True)
+
+    # 2. In explicit segmentation opt-out mode:
     # Neither segment has 13 contiguous windows (both have 3) -> 0 sequences formed
+    batch = build_sequences_from_windows(
+        windows,
+        strict_continuity=False,
+        return_metadata=True,
+    )
     assert len(batch.X) == 0, (
         "Must NOT construct sequences spanning across the 40-minute temporal gap!"
     )

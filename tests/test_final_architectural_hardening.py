@@ -212,3 +212,73 @@ def test_unseen_attack_evaluation_uses_predefined_seen_set():
     assert set(result) == {"seen", "unseen"}
     assert result["seen"].recall == 1.0
     assert result["unseen"].recall == 0.0
+
+
+def test_strict_inference_rejects_gapped_history():
+    from src.inference import prepare_input
+
+    rows = []
+    base = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    for i in range(10):
+        t = base + timedelta(seconds=10 * i if i < 5 else 10 * i + 30)
+        row = _canonical_row(i)
+        row["timestamp"] = t
+        rows.append(row)
+    df = pd.DataFrame(rows)
+
+    with pytest.raises(ValueError, match="Temporal discontinuity detected"):
+        prepare_input(
+            df=df,
+            source_host="10.0.0.1",
+            feature_order=list(CANONICAL_MODEL_FEATURE_NAMES),
+            scaler=IdentityScaler(),
+        )
+
+
+def test_strict_inference_rejects_duplicate_windows():
+    from src.inference import prepare_input
+
+    rows = [_canonical_row(i) for i in range(10)]
+    rows.append(dict(rows[3]))
+    df = pd.DataFrame(rows)
+
+    with pytest.raises(ValueError, match="Duplicate inference window detected"):
+        prepare_input(
+            df=df,
+            source_host="10.0.0.1",
+            feature_order=list(CANONICAL_MODEL_FEATURE_NAMES),
+            scaler=IdentityScaler(),
+        )
+
+
+def test_strict_inference_rejects_incomplete_history():
+    from src.inference import prepare_input
+
+    df = pd.DataFrame([_canonical_row(i) for i in range(5)])
+
+    with pytest.raises(ValueError, match="Need at least 10 windows"):
+        prepare_input(
+            df=df,
+            source_host="10.0.0.1",
+            feature_order=list(CANONICAL_MODEL_FEATURE_NAMES),
+            scaler=IdentityScaler(),
+        )
+
+
+def test_dataframe_sequence_continuity_rejects_gaps_by_default():
+    rows = []
+    base = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    for i in range(15):
+        t = base + timedelta(seconds=10 * i if i < 8 else 10 * i + 40)
+        row = _canonical_row(i)
+        row["timestamp"] = t
+        rows.append(row)
+    df = pd.DataFrame(rows)
+
+    with pytest.raises(ValueError, match="Temporal discontinuity detected"):
+        build_sequences_from_dataframe(
+            df=df,
+            feature_columns=list(CANONICAL_MODEL_FEATURE_NAMES),
+            sequence_length=10,
+            horizon=3,
+        )
