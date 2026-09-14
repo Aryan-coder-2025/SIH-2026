@@ -31,4 +31,17 @@ models/*.pt
 .DS_Store
 .vscode/
 .idea/
-data/raw/
+
+# Keeping required project directories in git
+!data/
+!data/raw/
+!data/raw/.gitkeep
+!data/intermediate/
+!data/intermediate/.gitkeep
+!data/processed/
+!data/processed/.gitkeep
+!artifacts
+!artifacts/.gitkeep
+
+# Local packet dumps
+pcap/
