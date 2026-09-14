@@ -13,30 +13,10 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 import numpy as np
 
 
-# Canonical feature names aligning with upstream pipeline (Aman / Shaurya)
-CANONICAL_FEATURES: List[str] = [
-    "syn_count",
-    "ack_count",
-    "unique_dst_port_count",
-    "unique_dst_ip_count",
-    "sequential_port_ratio",
-    "flow_count",
-    "packets_total",
-    "packet_count",
-    "bytes_total",
-    "bytes_mean",
-    "duration_mean",
-    "iat_mean",
-    "iat_std",
-    "packet_iat_std",
-    "ttl_mean",
-    "ttl_std",
-    "tcp_window_mean",
-    "tcp_window_std",
-    "fragment_count",
-    "retransmission_count",
-    "bidirectional_ratio",
-]
+from src.schemas.features import CANONICAL_MODEL_FEATURE_NAMES
+
+# Authoritative feature list aligning strictly with project-level canonical schema
+CANONICAL_FEATURES: List[str] = list(CANONICAL_MODEL_FEATURE_NAMES)
 
 
 @dataclass

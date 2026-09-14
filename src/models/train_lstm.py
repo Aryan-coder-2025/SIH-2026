@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 """
-train_lstm.py
--------------
-Early-warning botnet detection - LSTM baseline (CPU-only).
-
-Usage (from project root or directly):
-    python src/models/train_lstm.py
-    python src/models/train_lstm.py --epochs 10 --batch-size 32
+[LEGACY / PROTOTYPE NOTICE: NON-AUTHORITATIVE]
+Authoritative training workflow is implemented in src/train.py.
+This script represents an earlier CPU baseline and is retained for reference only.
 """
 import argparse
 from collections import defaultdict

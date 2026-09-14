@@ -324,6 +324,211 @@ def evaluate_prediction_records(
 
 
 # ----------------------------------------------------------------------
+# Threshold-independent metrics (ROC-AUC and PR-AUC)
+# ----------------------------------------------------------------------
+def compute_roc_auc(y_true: ArrayLike, risk: ArrayLike) -> float | None:
+    """
+    Compute Area Under the Receiver Operating Characteristic (ROC-AUC).
+    Returns None if y_true contains only a single class (AUC is undefined).
+    """
+    from sklearn.metrics import roc_auc_score
+
+    y_true_arr = _validate_binary_labels(_to_array(y_true, "y_true"), "y_true")
+    risk_arr = _validate_risk(_to_array(risk, "risk"), "risk")
+    _validate_same_length(y_true_arr, risk_arr)
+
+    if len(np.unique(y_true_arr)) < 2:
+        return None
+
+    return float(roc_auc_score(y_true_arr, risk_arr))
+
+
+def compute_pr_auc(y_true: ArrayLike, risk: ArrayLike) -> float | None:
+    """
+    Compute Area Under the Precision-Recall Curve (PR-AUC / Average Precision).
+    Returns None if y_true contains only a single class.
+    """
+    from sklearn.metrics import average_precision_score
+
+    y_true_arr = _validate_binary_labels(_to_array(y_true, "y_true"), "y_true")
+    risk_arr = _validate_risk(_to_array(risk, "risk"), "risk")
+    _validate_same_length(y_true_arr, risk_arr)
+
+    if len(np.unique(y_true_arr)) < 2:
+        return None
+
+    return float(average_precision_score(y_true_arr, risk_arr))
+
+
+# ----------------------------------------------------------------------
+# Scientific threshold optimization (validation freeze protocol)
+# ----------------------------------------------------------------------
+def optimize_threshold(
+    y_true: ArrayLike,
+    risk: ArrayLike,
+    metric: str = "f1",
+    candidate_thresholds: Sequence[float] | None = None,
+) -> float:
+    """
+    Search candidate decision thresholds on validation data to maximize a target metric.
+
+    SCIENTIFIC VALIDATION PROTOCOL:
+    Threshold selection must occur on the validation split and be frozen
+    prior to final test set evaluation.
+
+    Args:
+        y_true: Binary ground-truth labels (validation set).
+        risk: Continuous risk/probability predictions in [0, 1].
+        metric: Optimization target ("f1", "precision", or "recall").
+        candidate_thresholds: Optional sequence of candidate thresholds in (0, 1).
+
+    Returns:
+        Best threshold value (float) to be frozen for test evaluation.
+    """
+    if candidate_thresholds is None:
+        candidate_thresholds = [round(t, 2) for t in np.linspace(0.05, 0.95, 19)]
+
+    best_threshold = 0.50
+    best_score = -1.0
+
+    for t in candidate_thresholds:
+        res = evaluate_risk(y_true, risk, threshold=t)
+        score = getattr(res, metric, res.f1)
+        if score > best_score:
+            best_score = score
+            best_threshold = float(t)
+
+    return best_threshold
+
+
+# ----------------------------------------------------------------------
+# Early-warning and lead-time analysis
+# ----------------------------------------------------------------------
+@dataclass(frozen=True)
+class LeadTimeResult:
+    """Early-warning and lead-time analysis output."""
+    total_events: int
+    detected_events: int
+    detection_rate: float
+    mean_lead_time_seconds: float
+    earliest_detections_by_horizon: dict[int, int]
+    lead_times_seconds: list[int]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_events": self.total_events,
+            "detected_events": self.detected_events,
+            "detection_rate": self.detection_rate,
+            "mean_lead_time_seconds": self.mean_lead_time_seconds,
+            "earliest_detections_by_horizon": self.earliest_detections_by_horizon,
+            "lead_times_seconds": self.lead_times_seconds,
+        }
+
+
+def evaluate_lead_time(
+    records: Sequence[Any],
+    threshold: float = 0.50,
+) -> LeadTimeResult:
+    """
+    Evaluate early-warning lead time for attack forecast records.
+
+    For each unique target attack moment (source_host, target_time) where y_true == 1:
+    Determines the earliest advance horizon (+30s, +20s, or +10s) at which
+    predicted_risk met or exceeded the frozen decision threshold.
+    """
+    if not records:
+        raise EvaluationError("records cannot be empty.")
+
+    from collections import defaultdict
+    events: dict[tuple[str, Any], list[Any]] = defaultdict(list)
+    for rec in records:
+        if getattr(rec, "y_true", 0.0) == 1.0:
+            key = (str(getattr(rec, "source_host")), getattr(rec, "target_time"))
+            events[key].append(rec)
+
+    total_events = len(events)
+    if total_events == 0:
+        return LeadTimeResult(
+            total_events=0,
+            detected_events=0,
+            detection_rate=0.0,
+            mean_lead_time_seconds=0.0,
+            earliest_detections_by_horizon={10: 0, 20: 0, 30: 0},
+            lead_times_seconds=[],
+        )
+
+    detected_count = 0
+    earliest_by_h: dict[int, int] = defaultdict(int)
+    lead_times: list[int] = []
+
+    for event_key, event_records in events.items():
+        sorted_recs = sorted(
+            event_records,
+            key=lambda r: int(getattr(r, "forecast_horizon")),
+            reverse=True,
+        )
+        detected_horizon = None
+        for rec in sorted_recs:
+            if float(getattr(rec, "predicted_risk")) >= threshold:
+                detected_horizon = int(getattr(rec, "forecast_horizon"))
+                break
+
+        if detected_horizon is not None:
+            detected_count += 1
+            earliest_by_h[detected_horizon] += 1
+            lead_times.append(detected_horizon)
+
+    rate = (detected_count / total_events) if total_events > 0 else 0.0
+    mean_lt = (float(np.mean(lead_times))) if lead_times else 0.0
+
+    return LeadTimeResult(
+        total_events=total_events,
+        detected_events=detected_count,
+        detection_rate=round(rate, 4),
+        mean_lead_time_seconds=round(mean_lt, 2),
+        earliest_detections_by_horizon=dict(earliest_by_h),
+        lead_times_seconds=lead_times,
+    )
+
+
+# ----------------------------------------------------------------------
+# Unseen attack evaluation
+# ----------------------------------------------------------------------
+def evaluate_unseen_attacks(
+    records: Sequence[Any],
+    attack_labels: Sequence[str],
+    seen_attack_types: set[str],
+    threshold: float = 0.50,
+) -> dict[str, EvaluationResult]:
+    """
+    Partition forecast evaluation between seen attack types and unseen / zero-day attacks.
+    """
+    if len(records) != len(attack_labels):
+        raise EvaluationError("records and attack_labels must have the same length.")
+
+    seen_recs = []
+    unseen_recs = []
+
+    for rec, attack_type in zip(records, attack_labels):
+        if str(attack_type) in seen_attack_types:
+            seen_recs.append(rec)
+        else:
+            unseen_recs.append(rec)
+
+    results: dict[str, EvaluationResult] = {}
+    if seen_recs:
+        y_t = [float(getattr(r, "y_true")) for r in seen_recs]
+        r_k = [float(getattr(r, "predicted_risk")) for r in seen_recs]
+        results["seen"] = evaluate_risk(y_t, r_k, threshold=threshold)
+    if unseen_recs:
+        y_t = [float(getattr(r, "y_true")) for r in unseen_recs]
+        r_k = [float(getattr(r, "predicted_risk")) for r in unseen_recs]
+        results["unseen"] = evaluate_risk(y_t, r_k, threshold=threshold)
+
+    return results
+
+
+# ----------------------------------------------------------------------
 # Smoke test (optional manual run: python src/eval/metrics.py)
 # ----------------------------------------------------------------------
 if __name__ == "__main__":

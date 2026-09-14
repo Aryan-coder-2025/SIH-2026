@@ -1,4 +1,10 @@
 {
+  "_quarantine_provenance": {
+    "status": "SYNTHETIC_MOCK_DEMO_ONLY",
+    "dataset": "SYNTHETIC_SMOKE_DATA",
+    "warning": "DO NOT CITE AS REAL CSE-CIC-IDS2018 BENCHMARK RESULTS. This artifact contains pipeline smoke-test metrics only. Scientific validation on real CSE-CIC-IDS2018 network traffic is pending.",
+    "generated_by": "synthetic_smoke_pipeline"
+  },
   "10": {
     "precision": 0.3076923076923077,
     "recall": 0.8,

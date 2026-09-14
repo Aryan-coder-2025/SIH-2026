@@ -1,7 +1,17 @@
+"""
+[PROTOTYPE / ADAPTER MODULE - NON-AUTHORITATIVE]
+Authoritative sequence construction engine is strictly src.temporal.sequences.
+
+This module delegates directly to Aryan's canonical sequence engine
+to prevent duplicate or competing implementations.
+"""
 from __future__ import annotations
 
+import warnings
 import numpy as np
 import pandas as pd
+
+from src.temporal.sequences import build_sequences_from_dataframe as canonical_build_sequences_from_df
 
 
 def build_sequences(
@@ -15,139 +25,18 @@ def build_sequences(
     stage_column: str = "stage",
 ):
     """
-    Convert window-level network states into temporal sequences.
-
-    Input:
-        One row = one 10-second network state for one source host.
-
-    Output:
-        X:
-            shape = (samples, sequence_length, num_features)
-
-        y_risk:
-            shape = (samples, horizon)
-
-        y_stage:
-            shape = (samples,)
+    Adapter delegating to canonical src.temporal.sequences.build_sequences_from_dataframe.
     """
-
-    required_columns = (
-        [entity_column, timestamp_column, risk_column]
-        + feature_columns
+    return canonical_build_sequences_from_df(
+        df=df,
+        feature_columns=feature_columns,
+        sequence_length=sequence_length,
+        horizon=horizon,
+        entity_column=entity_column,
+        timestamp_column=timestamp_column,
+        risk_column=risk_column,
+        stage_column=stage_column,
     )
-
-    if stage_column in df.columns:
-        required_columns.append(stage_column)
-
-    missing = [
-        col for col in required_columns
-        if col not in df.columns
-    ]
-
-    if missing:
-        raise ValueError(
-            f"Missing required columns: {missing}"
-        )
-
-    df = df.copy()
-
-    # Convert timestamp
-    df[timestamp_column] = pd.to_datetime(
-        df[timestamp_column]
-    )
-
-    # Sort chronologically within each source host
-    df = df.sort_values(
-        [entity_column, timestamp_column]
-    ).reset_index(drop=True)
-
-    X_sequences = []
-    y_risk_sequences = []
-    y_stage = []
-
-    # Process each source host independently
-    for entity, group in df.groupby(entity_column, sort=False):
-
-        group = group.sort_values(
-            timestamp_column
-        ).reset_index(drop=True)
-
-        feature_values = group[feature_columns].to_numpy(
-            dtype=np.float32
-        )
-
-        risk_values = group[risk_column].to_numpy(
-            dtype=np.float32
-        )
-
-        if stage_column in group.columns:
-            stage_values = group[stage_column].astype(str).to_numpy()
-        else:
-            stage_values = np.array(
-                ["UNKNOWN"] * len(group)
-            )
-
-        # Need:
-        # sequence_length historical windows
-        # + horizon future windows
-        max_start = (
-            len(group)
-            - sequence_length
-            - horizon
-            + 1
-        )
-
-        if max_start <= 0:
-            continue
-
-        for i in range(max_start):
-
-            # Past 10 windows
-            X = feature_values[
-                i:i + sequence_length
-            ]
-
-            # Future +10, +20, +30 seconds
-            future_start = i + sequence_length
-
-            future_end = (
-                future_start + horizon
-            )
-
-            future_risk = risk_values[
-                future_start:future_end
-            ]
-
-            # Stage at first future point
-            future_stage = stage_values[
-                future_start
-            ]
-
-            X_sequences.append(X)
-            y_risk_sequences.append(future_risk)
-            y_stage.append(future_stage)
-
-    if not X_sequences:
-        raise ValueError(
-            "No sequences could be created. "
-            "Check sequence length and data size."
-        )
-
-    X = np.asarray(
-        X_sequences,
-        dtype=np.float32
-    )
-
-    y_risk = np.asarray(
-        y_risk_sequences,
-        dtype=np.float32
-    )
-
-    y_stage = np.asarray(
-        y_stage
-    )
-
-    return X, y_risk, y_stage
 
 
 if __name__ == "__main__":

@@ -39,9 +39,14 @@ import torch
 from scapy.all import IP, TCP, UDP, Ether, Raw, wrpcap  # type: ignore
 
 from src.baseline.persistence import PersistenceBaseline as AnkitPersistenceBaseline
-from src.eval.metrics import evaluate_prediction_records, evaluate_risk
+from src.eval.metrics import (
+    evaluate_lead_time,
+    evaluate_prediction_records,
+    evaluate_risk,
+    optimize_threshold,
+)
 from src.evaluation.records import PredictionRecord
-from src.explain.shap_explain import ShapExplainer
+from src.explain.shap_explain import AttributionExplainer, ShapExplainer
 from src.features.build_packet_features import build_packet_features
 from src.flow.flow_extractor import extract_flow_features
 from src.fusion.traffic_fusion import (
@@ -55,7 +60,9 @@ from src.model import WorldModel
 from src.pipeline import CyberForecastPipeline
 from src.schemas.features import (
     CANONICAL_FLOW_FEATURE_NAMES,
+    CANONICAL_FUSED_FEATURE_NAMES,
     CANONICAL_MODEL_FEATURE_NAMES,
+    CANONICAL_PACKET_FEATURE_NAMES,
     FORBIDDEN_FEATURE_NAMES,
     validate_feature_names,
 )
@@ -203,9 +210,10 @@ class TestMasterSystemIntegration:
                 return_metadata=True,
             )
 
-            # Assert sequence geometry
+            # Assert sequence geometry and authoritative fused feature dimension
             assert batch.X.shape[1] == 10  # 10 historical windows
             assert batch.y.shape[1] == 3   # 3 forecast horizons (+10s, +20s, +30s)
+            assert batch.X.shape[2] == len(CANONICAL_MODEL_FEATURE_NAMES)
             num_features = batch.X.shape[2]
 
             # -------------------------------------------------------------
@@ -236,10 +244,10 @@ class TestMasterSystemIntegration:
             # -------------------------------------------------------------
             # Attribution tensor of shape (3 horizons, 10 windows, num_features)
             sample_attributions = np.zeros((3, 10, num_features))
-            # Put synthetic attribution on feature 0 (e.g. packet_count or syn_count)
+            # Put synthetic attribution on feature 0 (e.g. syn_count or flow_count)
             sample_attributions[:, -1, 0] = 0.35
 
-            explainer = ShapExplainer(feature_names=[f"feature_{i}" for i in range(num_features)])
+            explainer = AttributionExplainer(feature_names=list(CANONICAL_MODEL_FEATURE_NAMES))
             sample_risk_timeline = [float(risk_probs[0, 0]), float(risk_probs[0, 1]), float(risk_probs[0, 2])]
 
             xai_result = explainer.explain_multi_horizon(
@@ -260,7 +268,7 @@ class TestMasterSystemIntegration:
             evidence_profile = evaluator.evaluate_temporal_sequence(
                 host_id=target_host,
                 temporal_features=batch.X[0],
-                feature_names=[f"feature_{i}" for i in range(num_features)],
+                feature_names=list(CANONICAL_MODEL_FEATURE_NAMES),
                 base_window_id=0,
             )
 
@@ -299,8 +307,16 @@ class TestMasterSystemIntegration:
                 assert pr.target_time == pr.prediction_time + timedelta(seconds=pr.forecast_horizon)
                 assert 0.0 <= pr.predicted_risk <= 1.0
 
-            # Multi-horizon evaluation metrics
-            eval_by_horizon = evaluate_prediction_records(pred_records, threshold=0.50)
+            # Threshold optimization on training labels, frozen for test evaluation
+            frozen_threshold = optimize_threshold(
+                y_true=batch.y.flatten(),
+                risk=risk_probs.flatten(),
+                metric="f1",
+            )
+            assert 0.05 <= frozen_threshold <= 0.95
+
+            # Multi-horizon evaluation metrics using frozen threshold
+            eval_by_horizon = evaluate_prediction_records(pred_records, threshold=frozen_threshold)
             assert 10 in eval_by_horizon
             assert 20 in eval_by_horizon
             assert 30 in eval_by_horizon
@@ -311,6 +327,11 @@ class TestMasterSystemIntegration:
                 assert 0.0 <= res.recall <= 1.0
                 assert 0.0 <= res.f1 <= 1.0
                 assert 0.0 <= res.fpr <= 1.0
+
+            # Early-warning lead-time evaluation
+            lead_time_result = evaluate_lead_time(pred_records, threshold=frozen_threshold)
+            assert lead_time_result.total_events >= 0
+            assert 0.0 <= lead_time_result.detection_rate <= 1.0
 
             # -------------------------------------------------------------
             # Stage 12: Baselines Comparison (Ankit / Aryan)

@@ -11,9 +11,10 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 import numpy as np
 
 from src.explain.shap_explain import ShapExplainer
-from src.mitre.evidence import CANONICAL_FEATURES, EvidenceRuleEvaluator, HostEvidenceProfile
+from src.mitre.evidence import EvidenceRuleEvaluator, HostEvidenceProfile
 from src.mitre.mapping import MitreInterpretation, MitreMapper
 from src.mitre.recommendations import RecommendationEngine
+from src.schemas.features import CANONICAL_MODEL_FEATURE_NAMES
 
 
 class CyberForecastPipeline:
@@ -53,7 +54,7 @@ class CyberForecastPipeline:
         3. Candidate MITRE mapping with explicit confidence & rationale
         4. Actionable defender recommendations
         """
-        names = feature_names or CANONICAL_FEATURES
+        names = list(feature_names) if feature_names is not None else list(CANONICAL_MODEL_FEATURE_NAMES)
 
         # 1. Multi-horizon Explainability
         xai_result = self.explainer.explain_multi_horizon(

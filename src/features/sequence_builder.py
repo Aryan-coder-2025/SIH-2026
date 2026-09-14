@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """
-sequence_builder.py
--------------------
-Converts the per-(src_ip, window_id) feature DataFrame into LSTM-ready sequences.
-
-A sequence is a sliding window of HISTORY_WINDOWS time steps, and the label
-is whether ANY of the next 1/2/3 windows will be classified as botnet.
+[LEGACY / PROTOTYPE NOTICE: NON-AUTHORITATIVE]
+Canonical sequence construction is strictly governed by src.temporal.sequences.
+This file is retained solely for legacy baseline reproduction and reference.
 """
 import logging
 

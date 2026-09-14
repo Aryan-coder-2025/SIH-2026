@@ -6,8 +6,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Sequence
 
 import numpy as np
+import pandas as pd
 
 from src.config import TemporalConfig, get_temporal_config
+from src.schemas.features import validate_feature_names
 from src.schemas.traffic import TrafficWindow, normalize_to_utc
 
 
@@ -429,3 +431,84 @@ def build_sequences_from_windows(
         strict_continuity=strict_continuity,
         return_metadata=return_metadata,
     )
+
+
+def build_sequences_from_dataframe(
+    df: pd.DataFrame,
+    feature_columns: list[str],
+    sequence_length: int = 10,
+    horizon: int = 3,
+    entity_column: str = "source_host",
+    timestamp_column: str = "timestamp",
+    risk_column: str = "is_malicious",
+    stage_column: str = "stage",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Authoritative DataFrame adapter for temporal sequence construction.
+
+    Enforces:
+    1. Anti-leakage feature name validation.
+    2. Chronological ordering strictly per source host.
+    3. Host isolation (sequences never cross host boundaries).
+    4. Exact sequence geometry (samples, sequence_length, num_features).
+
+    Returns:
+        X: shape (samples, sequence_length, num_features)
+        y_risk: shape (samples, horizon)
+        y_stage: shape (samples,)
+    """
+    cleaned_features = validate_feature_names(feature_columns)
+
+    required_columns = (
+        [entity_column, timestamp_column, risk_column]
+        + cleaned_features
+    )
+    if stage_column in df.columns:
+        required_columns.append(stage_column)
+
+    missing = [c for c in required_columns if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns in DataFrame: {missing}")
+
+    df_clean = df.copy()
+    df_clean[timestamp_column] = pd.to_datetime(df_clean[timestamp_column])
+    df_clean = df_clean.sort_values([entity_column, timestamp_column]).reset_index(drop=True)
+
+    X_list: list[np.ndarray] = []
+    y_risk_list: list[np.ndarray] = []
+    y_stage_list: list[Any] = []
+
+    for _, group in df_clean.groupby(entity_column, sort=False):
+        group_sorted = group.sort_values(timestamp_column).reset_index(drop=True)
+
+        feat_vals = group_sorted[cleaned_features].to_numpy(dtype=np.float32)
+        risk_vals = group_sorted[risk_column].to_numpy(dtype=np.float32)
+
+        if stage_column in group_sorted.columns:
+            stage_vals = group_sorted[stage_column].astype(str).to_numpy()
+        else:
+            stage_vals = np.array(["UNKNOWN"] * len(group_sorted))
+
+        max_start = len(group_sorted) - sequence_length - horizon + 1
+        if max_start <= 0:
+            continue
+
+        for i in range(max_start):
+            X_seq = feat_vals[i : i + sequence_length]
+            future_start = i + sequence_length
+            future_end = future_start + horizon
+            future_risk = risk_vals[future_start:future_end]
+            future_stage = stage_vals[future_start]
+
+            X_list.append(X_seq)
+            y_risk_list.append(future_risk)
+            y_stage_list.append(future_stage)
+
+    if not X_list:
+        raise ValueError("No sequences could be created. Check sequence length and data size.")
+
+    X = np.asarray(X_list, dtype=np.float32)
+    y_risk = np.asarray(y_risk_list, dtype=np.float32)
+    y_stage = np.asarray(y_stage_list)
+
+    return X, y_risk, y_stage

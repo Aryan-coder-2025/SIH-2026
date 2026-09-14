@@ -61,8 +61,22 @@ CANONICAL_PACKET_FEATURE_NAMES: tuple[str, ...] = (
     "packet_iat_max",
 )
 
-# Canonical model input feature order
-CANONICAL_MODEL_FEATURE_NAMES: tuple[str, ...] = CANONICAL_FLOW_FEATURE_NAMES
+# 41 Fused features combining flow-level and packet-level signals
+CANONICAL_FUSED_FEATURE_NAMES: tuple[str, ...] = (
+    CANONICAL_FLOW_FEATURE_NAMES + CANONICAL_PACKET_FEATURE_NAMES
+)
+
+# Canonical authoritative model input feature order (41 features)
+CANONICAL_MODEL_FEATURE_NAMES: tuple[str, ...] = CANONICAL_FUSED_FEATURE_NAMES
+
+# Known feature aliases across teammate extraction modules
+FEATURE_ALIASES: dict[str, str] = {
+    "flow_bytes_total": "bytes_total",
+    "flow_packets_total": "packets_total",
+    "flow_duration_mean": "duration_mean",
+    "flow_iat_mean": "iat_mean",
+    "flow_iat_max": "iat_max",
+}
 
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,14 @@ import numpy as np
 import pandas as pd
 
 from src.flow.flow_extractor import aggregate_flows_to_host_windows
+from src.schemas.features import (
+    CANONICAL_FLOW_FEATURE_NAMES,
+    CANONICAL_MODEL_FEATURE_NAMES,
+    CANONICAL_PACKET_FEATURE_NAMES,
+    FEATURE_ALIASES,
+    FORBIDDEN_FEATURE_NAMES,
+    validate_feature_names,
+)
 from src.schemas.traffic import TrafficWindow
 
 REQUIRED_PACKET_KEYS = ["src_ip", "window_id"]
@@ -192,6 +200,7 @@ def fuse_flow_and_packet_data(
 def fused_df_to_traffic_windows(
     fused_df: pd.DataFrame,
     label_col: str | None = None,
+    feature_names: Sequence[str] | None = None,
 ) -> list[TrafficWindow]:
     """
     Convert a fused feature DataFrame into canonical TrafficWindow objects.
@@ -208,37 +217,57 @@ def fused_df_to_traffic_windows(
     if fused_df.empty:
         return []
 
-    # Identify non-feature columns
-    metadata_cols = {
-        "src_ip",
-        "dst_ip",
-        "src_port",
-        "dst_port",
-        "window_id",
-        "window_start",
-        "window_end",
-        "timestamp",
-        "flow_id",
-        "label",
-        "target",
-        "attack_type",
-        "y_true",
-    }
-    if label_col:
-        metadata_cols.add(label_col)
+    # Normalize known feature aliases if present
+    df = fused_df.rename(columns={k: v for k, v in FEATURE_ALIASES.items() if k in fused_df.columns})
 
-    numeric_cols = [
-        c for c in fused_df.columns
-        if c not in metadata_cols and pd.api.types.is_numeric_dtype(fused_df[c])
-    ]
+    # Resolve authoritative active features
+    if feature_names is not None:
+        active_features = validate_feature_names(feature_names)
+    else:
+        all_cols = set(df.columns)
+        has_packet = any(c in all_cols for c in CANONICAL_PACKET_FEATURE_NAMES)
+        has_flow = any(c in all_cols for c in CANONICAL_FLOW_FEATURE_NAMES)
+
+        if has_packet and has_flow:
+            # Full fused flow + packet pipeline: authoritative 41 features
+            active_features = list(CANONICAL_MODEL_FEATURE_NAMES)
+        elif has_flow:
+            active_features = list(CANONICAL_FLOW_FEATURE_NAMES)
+        elif has_packet:
+            active_features = list(CANONICAL_PACKET_FEATURE_NAMES)
+        else:
+            metadata_cols = {
+                "src_ip",
+                "dst_ip",
+                "src_port",
+                "dst_port",
+                "window_id",
+                "window_start",
+                "window_end",
+                "timestamp",
+                "flow_id",
+                "label",
+                "target",
+                "attack_type",
+                "y_true",
+            }
+            if label_col:
+                metadata_cols.add(label_col)
+
+            numeric_cols = [
+                c for c in df.columns
+                if c not in metadata_cols and pd.api.types.is_numeric_dtype(df[c])
+            ]
+            active_features = validate_feature_names(numeric_cols)
 
     windows: list[TrafficWindow] = []
+    col_set = set(df.columns)
 
-    for _, row in fused_df.iterrows():
+    for _, row in df.iterrows():
         src_host = str(row["src_ip"]).strip()
 
         # Timestamp normalization
-        if "timestamp" in row and pd.notna(row["timestamp"]):
+        if "timestamp" in col_set and pd.notna(row["timestamp"]):
             raw_ts = row["timestamp"]
             if isinstance(raw_ts, (int, float)):
                 ts = datetime.fromtimestamp(float(raw_ts), tz=timezone.utc)
@@ -250,17 +279,17 @@ def fused_df_to_traffic_windows(
                 ts = raw_ts if raw_ts.tzinfo is not None else raw_ts.replace(tzinfo=timezone.utc)
             else:
                 ts = datetime.fromtimestamp(float(row["window_id"]) * 10.0, tz=timezone.utc)
-        elif "window_start" in row and pd.notna(row["window_start"]):
+        elif "window_start" in col_set and pd.notna(row["window_start"]):
             ts = datetime.fromtimestamp(float(row["window_start"]), tz=timezone.utc)
         else:
             ts = datetime.fromtimestamp(float(row["window_id"]) * 10.0, tz=timezone.utc)
 
         # Discrete packet and byte quantities
-        p_count = int(row.get("packet_count", row.get("flow_packets_total", 0)))
-        b_count = int(row.get("flow_bytes_total", row.get("payload_max", 0)))
+        p_count = int(row.get("packet_count", row.get("flow_packets_total", row.get("packets_total", 0))))
+        b_count = int(row.get("flow_bytes_total", row.get("bytes_total", row.get("payload_max", 0))))
 
-        # Feature vector
-        feat_vals = tuple(float(row[c]) if pd.notna(row[c]) else 0.0 for c in numeric_cols)
+        # Feature vector (deterministic canonical feature ordering)
+        feat_vals = tuple(float(row[c]) if c in col_set and pd.notna(row[c]) else 0.0 for c in active_features)
 
         # Label extraction if available
         lbl = None
