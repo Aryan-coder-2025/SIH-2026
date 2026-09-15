@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any
 
 from src.qa_mock_data import generate_mock_data
@@ -128,7 +128,7 @@ def run_qa_pipeline() -> List[Dict[str, Any]]:
             hyperparameters={"n_estimators": 100},
             threshold=0.70,
             metrics=flat_metrics,
-            created_at=datetime.utcnow().isoformat() + "Z"
+            created_at=datetime.now(timezone.utc).isoformat()
         )
         artifacts.append(artifact.to_dict())
 
