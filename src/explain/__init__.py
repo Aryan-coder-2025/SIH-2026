@@ -1,8 +1,10 @@
 """
-Explainability & SHAP Translation package.
+Explainability & Attribution Translation package.
+Owner: Srijani
 """
 
 from src.explain.shap_explain import (
+    AttributionExplainer,
     ExplainedFeature,
     FEATURE_DISPLAY_MAP,
     HorizonExplanation,
@@ -10,6 +12,7 @@ from src.explain.shap_explain import (
 )
 
 __all__ = [
+    "AttributionExplainer",
     "ExplainedFeature",
     "FEATURE_DISPLAY_MAP",
     "HorizonExplanation",

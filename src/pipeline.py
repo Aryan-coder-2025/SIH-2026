@@ -10,7 +10,7 @@ import json
 from typing import Any, Dict, List, Optional, Sequence, Union
 import numpy as np
 
-from src.explain.shap_explain import ShapExplainer
+from src.explain.shap_explain import AttributionExplainer, ShapExplainer
 from src.mitre.evidence import CANONICAL_FEATURES, EvidenceRuleEvaluator, HostEvidenceProfile
 from src.mitre.mapping import MitreInterpretation, MitreMapper
 from src.mitre.recommendations import RecommendationEngine
@@ -25,7 +25,7 @@ class CyberForecastPipeline:
         self,
         evidence_evaluator: Optional[EvidenceRuleEvaluator] = None,
         mitre_mapper: Optional[MitreMapper] = None,
-        shap_explainer: Optional[ShapExplainer] = None,
+        shap_explainer: Optional[Union[AttributionExplainer, ShapExplainer]] = None,
         recommendation_engine: Optional[RecommendationEngine] = None,
     ):
         self.evaluator = evidence_evaluator or EvidenceRuleEvaluator()

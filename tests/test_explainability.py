@@ -1,6 +1,6 @@
 """
-Unit tests for Temporal Explainability & SHAP Translation Engine.
-Validates requirements from Aryan's review (XAI-08, XAI-09, XAI-10, XAI-17).
+Unit tests for Temporal Explainability & Attribution Translation Engine.
+Validates requirements from Aryan's review (XAI-08, XAI-09, XAI-10, XAI-17, S1-S5).
 """
 
 import math
@@ -8,6 +8,7 @@ import unittest
 import numpy as np
 
 from src.explain.shap_explain import (
+    AttributionExplainer,
     ExplainedFeature,
     HorizonExplanation,
     ShapExplainer,
@@ -17,7 +18,12 @@ from src.mitre.evidence import CANONICAL_FEATURES
 
 class TestExplainability(unittest.TestCase):
     def setUp(self):
-        self.explainer = ShapExplainer()
+        self.explainer = AttributionExplainer()
+
+    def test_class_naming_and_alias(self):
+        """Tests that AttributionExplainer is the primary class and ShapExplainer is an alias (S1)."""
+        self.assertIs(ShapExplainer, AttributionExplainer)
+        self.assertIsInstance(self.explainer, AttributionExplainer)
 
     def test_single_horizon_ranking_and_direction(self):
         """Tests that features are ranked by absolute magnitude with proper directionality."""
@@ -75,6 +81,41 @@ class TestExplainability(unittest.TestCase):
         self.assertEqual(result["horizons"][0]["urgency_level"], "MEDIUM")
         self.assertEqual(result["horizons"][2]["horizon_seconds"], 30)
         self.assertEqual(result["horizons"][2]["urgency_level"], "HIGH")
+
+    def test_rejection_of_missing_horizons(self):
+        """Tests S4: System must reject missing horizons instead of silent padding."""
+        incomplete_timeline = [
+            {"offset_seconds": 10, "risk": 0.55},
+            {"offset_seconds": 20, "risk": 0.72},
+        ]
+        attrs = {
+            10: {"syn_count": 0.15},
+            20: {"syn_count": 0.25},
+            30: {"syn_count": 0.35},
+        }
+        with self.assertRaises(ValueError) as ctx:
+            self.explainer.explain_multi_horizon(
+                risk_timeline=incomplete_timeline,
+                attributions_by_horizon=attrs,
+                strict_contract=True,
+            )
+        self.assertIn("Multi-horizon forecast contract violation", str(ctx.exception))
+
+    def test_rejection_of_missing_horizon_attributions(self):
+        """Tests S5: System must reject missing horizon attributions instead of cross-horizon fallback."""
+        risk_timeline = [0.55, 0.72, 0.88]
+        incomplete_attrs = {
+            10: {"syn_count": 0.15},
+            20: {"syn_count": 0.25},
+            # Missing 30s attribution
+        }
+        with self.assertRaises(ValueError) as ctx:
+            self.explainer.explain_multi_horizon(
+                risk_timeline=risk_timeline,
+                attributions_by_horizon=incomplete_attrs,
+                strict_contract=True,
+            )
+        self.assertIn("Missing attribution for forecast horizon +30s", str(ctx.exception))
 
     def test_preservation_of_temporal_context(self):
         """Tests XAI-09: Temporal window context preservation (10 windows x F)."""

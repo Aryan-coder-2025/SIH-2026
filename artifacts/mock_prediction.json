@@ -1,4 +1,9 @@
 {
+  "provenance": {
+    "synthetic": true,
+    "integration_test_only": true,
+    "not_real_model_output": true
+  },
   "host_id": "host-192-168-1-105",
   "window_id": 42,
   "timestamp": "2026-09-10T22:50:00Z",

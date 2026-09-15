@@ -4,7 +4,7 @@
 This document defines the scientific, evidence-grounded framework for translating forecasted network states and temporal telemetry into candidate **MITRE ATT&CK Enterprise Framework** techniques.
 
 - **MITRE ATT&CK Framework Version:** `v15.1 Enterprise`
-- **Mapping Specification Version:** `2026.09.10-r1`
+- **Mapping Specification Version:** `2026.09.15-r2`
 - **Component Owner:** Srijani (Cybersecurity + MITRE + Explainability)
 
 > [!IMPORTANT]
@@ -25,7 +25,7 @@ The mapping engine enforces a strictly controlled registry of verified MITRE Ent
 | **T1110** | Brute Force | Credential Access (TA0006) | `flow_count`, `retransmission_count`, `duration_std` | Rapid repeated authentication attempts with high retry volume |
 | **T1498** | Network Denial of Service | Impact (TA0040) | `packets_total`, `syn_count`, `bytes_total` | Severe volumetric packet surge attempting link saturation |
 | **T1499** | Endpoint Denial of Service | Impact (TA0040) | `rst_count`, `flow_count`, `duration_mean` | Abnormal TCP connection resets / target resource starvation |
-| **T1071** | Application Layer Protocol (C2) | Command and Control (TA0011) | `iat_std`, `duration_mean`, `bidirectional_ratio` | Strict periodic inter-arrival timing (automated C2 beaconing) |
+| **T1071** | Application Layer Protocol (C2) | Command and Control (TA0011) | `iat_std`, `duration_mean`, `bidirectional_ratio` | Strict periodic inter-arrival timing (potential C2 beaconing) |
 | **T1048** | Exfiltration Over Alternative Protocol | Exfiltration (TA0010) | `bytes_total`, `bidirectional_ratio` | High outbound byte transfer volume exceeding baseline ratios |
 | **T1190** | Exploit Public-Facing Application | Initial Access (TA0001) | `payload_mean`, `payload_max`, `fragment_count` | Anomalous payload sizes and packet fragmentation on public ports |
 
@@ -33,7 +33,7 @@ The mapping engine enforces a strictly controlled registry of verified MITRE Ent
 
 ## 2. Canonical Feature Alignment
 
-The mapping engine operates strictly on the canonical feature matrix produced upstream (Aman & Shaurya):
+The mapping engine operates strictly on the canonical 41-feature matrix produced upstream:
 - **Port & IP Breadth:** `unique_dst_port_count`, `unique_dst_ip_count`, `sequential_port_ratio`
 - **TCP Flag & Flow Dynamics:** `syn_count`, `ack_count`, `rst_count`, `flow_count`, `retransmission_count`
 - **Volume & Timing:** `packets_total`, `bytes_total`, `duration_mean`, `iat_mean`, `iat_std`, `ttl_mean`, `ttl_std`, `bidirectional_ratio`
@@ -42,21 +42,21 @@ The mapping engine operates strictly on the canonical feature matrix produced up
 
 ## 3. Deterministic Mapping Confidence Scoring
 
-Mapping confidence $C_{\text{mapping}} \in [0.0, 1.0]$ is computed deterministically from observed evidence strength and SHAP feature alignment:
+Mapping confidence $C_{\text{mapping}} \in [0.0, 1.0]$ is computed deterministically from observed evidence strength and attribution feature alignment:
 
 $$C_{\text{mapping}} = w_{\text{model}} \cdot P(\text{forecast\_risk}) + w_{\text{rule}} \cdot \left(\frac{\min(N_{\text{matched}}, 3)}{3}\right) + w_{\text{shap}} \cdot S_{\text{alignment}}$$
 
 Where:
 - $P(\text{forecast\_risk}) \in [0.0, 1.0]$: Maximum forecasted risk from the World Model.
 - $N_{\text{matched}}$: Number of active heuristic evidence rules satisfied.
-- $S_{\text{alignment}} \in [0.0, 1.0]$: Fraction of top SHAP features matching candidate technique indicators.
-- Weights: $w_{\text{model}} = 0.40, w_{\text{rule}} = 0.35, w_{\text{shap}} = 0.25$.
+- $S_{\text{alignment}} \in [0.0, 1.0]$: Fraction of top attribution features matching candidate technique indicators.
+- Heuristic Weights: $w_{\text{model}} = 0.40, w_{\text{rule}} = 0.35, w_{\text{shap}} = 0.25$.
 - Result is bounded strictly: $C_{\text{mapping}} \in [0.05, 0.99]$.
 
 > [!NOTE]
-> **Semantic Separation:**
-> - `forecast_risk`: Model prediction of future malicious risk escalation.
-> - `mapping_confidence`: Rule-based attribution confidence that observed telemetry matches the candidate technique's behavioral signature.
+> **Scientific Interpretation Boundary (Auditor Requirement S6 & S7):**
+> - `mapping_confidence` is a **deterministic heuristic evidence/rule alignment score**, NOT a calibrated statistical probability that an attacker is using technique X.
+> - The model's primary objective is forecasting **future malicious risk**; MITRE mapping is an auxiliary, post-hoc interpretation layer.
 
 ---
 
@@ -69,3 +69,11 @@ If the forecast model predicts elevated risk, but observed telemetry does NOT sa
 4. `mapping_confidence = 0.0`
 5. `rationale = "Elevated malicious risk forecasted, but observed evidence is insufficient to defensibly map to a specific MITRE ATT&CK technique."`
 6. Generic SOC investigation recommendations are provided rather than forcing an inaccurate MITRE technique.
+
+---
+
+## 5. Defender Recommendations & Operational Safety
+
+- All generated containment, investigation, and hardening steps (e.g. `iptables`, `sysctl`, `tcpdump`) are **advisory examples for SOC analysts**.
+- **Human-in-the-Loop Safety:** The system never automatically executes network or firewall commands.
+- Pipeline flow: $\text{Forecast} \rightarrow \text{Interpretation} \rightarrow \text{Advisory Recommendations} \rightarrow \text{Human SOC Decision}$.
