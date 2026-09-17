@@ -1,4 +1,4 @@
-from scapy.all import rdpcap, IP, TCP, UDP
+from scapy.all import PcapReader, IP, TCP, UDP
 import pandas as pd
 import sys
 from collections import defaultdict
@@ -20,7 +20,7 @@ def normalize_protocol(packet):
 
 def extract_flow_features(pcap_path):
     # Read the PCAP file.
-    packets = rdpcap(pcap_path)
+    packets = PcapReader(pcap_path)
 
     # Store packets separately for each flow and actual time window.
     flow_windows = defaultdict(list)
