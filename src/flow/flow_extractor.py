@@ -4,7 +4,8 @@ import sys
 from collections import defaultdict
 
 
-WINDOW_SIZE = 10
+# Read the canonical window size from project.yaml.
+from src.features.packet_windowing import WINDOW_SIZE
 
 
 def normalize_protocol(packet):
