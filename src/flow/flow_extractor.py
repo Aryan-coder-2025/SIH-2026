@@ -30,8 +30,15 @@ def extract_flow_features(pcap_path):
         if IP not in packet:
             continue
 
-        # Read the packet timestamp.
-        timestamp = float(packet.time)
+                # Validate the packet timestamp before using it.
+        try:
+            timestamp = float(packet.time)
+        except (AttributeError, TypeError, ValueError):
+            continue
+
+        # Ignore invalid or negative timestamps.
+        if timestamp < 0:
+            continue
 
         # Extract source and destination IP addresses.
         src_ip = packet[IP].src
