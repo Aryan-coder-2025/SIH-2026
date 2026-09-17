@@ -1,4 +1,4 @@
-from scapy.all import PcapReader, IP, TCP, UDP
+from scapy.all import PcapReader, IP, IPv6, TCP, UDP
 import pandas as pd
 import sys
 from collections import defaultdict
@@ -26,10 +26,16 @@ def extract_flow_features(pcap_path):
     flow_windows = defaultdict(list)
 
     for packet in packets:
-        # Only process IPv4 packets for the current flow extractor.
-        if IP not in packet:
+        # Process IPv4 and IPv6 packets.
+        if IP in packet:
+            src_ip = packet[IP].src
+            dst_ip = packet[IP].dst
+        elif IPv6 in packet:
+            src_ip = packet[IPv6].src
+            dst_ip = packet[IPv6].dst
+        else:
+            # Ignore packets without an IP layer.
             continue
-
                 # Validate the packet timestamp before using it.
         try:
             timestamp = float(packet.time)
