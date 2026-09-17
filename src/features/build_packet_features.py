@@ -71,21 +71,23 @@ if __name__ == "__main__":
 
     import sys
 
+    # Check that a PCAP file was provided.
     if len(sys.argv) < 2:
         print("Usage: python build_packet_features.py <pcap_file>")
         sys.exit(1)
 
+    # Read the PCAP path from the command line.
     pcap_file = sys.argv[1]
 
+    # Build packet-level features from the PCAP.
     results = build_packet_features(pcap_file)
 
-    import pandas as pd
+    # Save the generated features to Parquet.
+    output_file = "packet_features.parquet"
+    df = pd.DataFrame(results)
 
-output_file = "packet_features.parquet"
+    df.to_parquet(output_file, index=False)
 
-df = pd.DataFrame(results)
-
-df.to_parquet(output_file, index=False)
-
-print(f"Packet windows generated: {len(results)}")
-print(f"Saved packet features to: {output_file}")
+    # Report the generated output.
+    print(f"Packet windows generated: {len(results)}")
+    print(f"Saved packet features to: {output_file}")
