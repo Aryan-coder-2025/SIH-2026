@@ -19,31 +19,42 @@ def normalize_protocol(packet):
 
 
 def extract_flow_features(pcap_path):
+    # Read the PCAP file.
     packets = rdpcap(pcap_path)
 
-    flows = defaultdict(list)
+    # Store packets separately for each flow and actual time window.
+    flow_windows = defaultdict(list)
 
     for packet in packets:
+        # Only process IPv4 packets for the current flow extractor.
         if IP not in packet:
             continue
 
+        # Read the packet timestamp.
         timestamp = float(packet.time)
 
+        # Extract source and destination IP addresses.
         src_ip = packet[IP].src
         dst_ip = packet[IP].dst
+
+        # Normalize the protocol to the canonical numeric ID.
         protocol = normalize_protocol(packet)
 
+        # Default ports for non-TCP/UDP traffic.
         src_port = 0
         dst_port = 0
 
+        # Extract TCP ports.
         if TCP in packet:
             src_port = int(packet[TCP].sport)
             dst_port = int(packet[TCP].dport)
 
+        # Extract UDP ports.
         elif UDP in packet:
             src_port = int(packet[UDP].sport)
             dst_port = int(packet[UDP].dport)
 
+        # Build the canonical 5-tuple flow identity.
         flow_key = (
             src_ip,
             dst_ip,
@@ -52,28 +63,33 @@ def extract_flow_features(pcap_path):
             protocol
         )
 
-        flows[flow_key].append({
+        # Assign this packet to its actual 10-second window.
+        window_id = int(timestamp // WINDOW_SIZE)
+
+        # Store the packet inside its flow and actual window.
+        flow_windows[(flow_key, window_id)].append({
             "timestamp": timestamp,
             "packet_length": len(packet)
         })
 
     results = []
 
-    for flow_key, flow_packets in flows.items():
+    # Calculate features independently for every flow-window pair.
+    for (flow_key, window_id), flow_packets in flow_windows.items():
 
         src_ip, dst_ip, src_port, dst_port, protocol = flow_key
 
+        # Sort packets chronologically within the window.
         flow_packets.sort(key=lambda x: x["timestamp"])
 
         timestamps = [p["timestamp"] for p in flow_packets]
         lengths = [p["packet_length"] for p in flow_packets]
 
-        first_timestamp = timestamps[0]
-
-        window_id = int(first_timestamp // WINDOW_SIZE)
+        # Calculate the canonical window boundaries.
         window_start = window_id * WINDOW_SIZE
         window_end = window_start + WINDOW_SIZE
 
+        # Calculate packet inter-arrival times.
         iat_values = []
 
         for i in range(1, len(timestamps)):
@@ -81,6 +97,7 @@ def extract_flow_features(pcap_path):
                 timestamps[i] - timestamps[i - 1]
             )
 
+        # Create a feature row for this flow-window pair.
         results.append({
             "src_ip": src_ip,
             "dst_ip": dst_ip,
@@ -98,7 +115,7 @@ def extract_flow_features(pcap_path):
             "window_start": window_start,
             "window_end": window_end,
 
-            "timestamp": first_timestamp,
+            "timestamp": timestamps[0],
 
             "flow_packet_count": len(flow_packets),
 
@@ -128,7 +145,6 @@ def extract_flow_features(pcap_path):
         })
 
     return results
-
 
 if __name__ == "__main__":
 
