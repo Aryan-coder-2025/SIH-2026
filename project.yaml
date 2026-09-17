@@ -1,0 +1,19 @@
+# Canonical project configuration.
+
+window:
+  size_seconds: 10
+
+history:
+  windows: 10
+
+horizon:
+  windows: 3
+
+entity:
+  type: source_host
+
+protocol:
+  TCP: 6
+  UDP: 17
+  ICMP: 1
+  OTHER: -1
