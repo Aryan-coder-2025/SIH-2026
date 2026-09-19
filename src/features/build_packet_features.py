@@ -9,7 +9,7 @@ import sys
 from typing import Any
 
 import pandas as pd
-from scapy.all import IP, PcapReader  # type: ignore
+from scapy.all import IP, IPv6, PcapReader  # type: ignore
 
 from src.features.packet_features import calculate_packet_features
 from src.features.packet_windowing import (
@@ -90,7 +90,9 @@ def build_packet_features(
 
         # Majority protocol for the host in this window
         protocols = [
-            normalize_protocol(p[IP].proto) for p in src_packets if IP in p
+            normalize_protocol(p[IP].proto if IP in p else p[IPv6].nh)
+            for p in src_packets
+            if IP in p or IPv6 in p
         ]
         row["protocol_id"] = (
             max(set(protocols), key=protocols.count) if protocols else -1

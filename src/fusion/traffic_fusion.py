@@ -126,11 +126,18 @@ def fuse_flow_and_packet_dfs(
     """
     for col in REQUIRED_PACKET_KEYS:
         if col not in packet_df.columns:
-            raise ValueError(f"Packet DataFrame missing required key: {col}")
+            raise ValueError(f"Packet data missing required key column: {col}")
 
     for col in REQUIRED_FLOW_KEYS:
         if col not in flow_df.columns:
-            raise ValueError(f"Flow DataFrame missing required key: {col}")
+            raise ValueError(f"Flow data missing required key column: {col}")
+
+    packet_df = packet_df.copy()
+    flow_df = flow_df.copy()
+    packet_df["window_id"] = packet_df["window_id"].astype(int)
+    flow_df["window_id"] = flow_df["window_id"].astype(int)
+    packet_df["src_ip"] = packet_df["src_ip"].astype(str).str.strip()
+    flow_df["src_ip"] = flow_df["src_ip"].astype(str).str.strip()
 
     # Step 1: Ensure flow table is aggregated per (src_ip, window_id)
     # Check if flow_df has multiple rows per key
@@ -142,7 +149,7 @@ def fuse_flow_and_packet_dfs(
 
     # Step 2: Ensure packet table has no duplicate (src_ip, window_id) keys
     if packet_df.duplicated(subset=["src_ip", "window_id"]).any():
-        raise ValueError("Packet DataFrame contains duplicate (src_ip, window_id) keys")
+        raise ValueError("Packet data contains duplicate source-host/window rows.")
 
     # Step 3: Prefix non-key columns of flow table if overlapping with packet table
     overlapping = (set(packet_df.columns) & set(flow_agg.columns)) - {"src_ip", "window_id"}
@@ -172,27 +179,63 @@ def fuse_flow_and_packet_dfs(
 
 
 def fuse_flow_and_packet_data(
-    flow_file: str,
-    packet_file: str,
+    flow_file: str | pd.DataFrame,
+    packet_file: str | pd.DataFrame,
     output_file: str | None = None,
     how: str = "left",
-) -> pd.DataFrame:
+    return_metrics: bool = False,
+) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
     """
-    Load Parquet files, fuse packet and flow features, and optionally save result.
-    """
-    if not os.path.isfile(flow_file):
-        raise FileNotFoundError(f"Flow file not found: {flow_file}")
-    if not os.path.isfile(packet_file):
-        raise FileNotFoundError(f"Packet file not found: {packet_file}")
+    Load data (Parquet or DataFrame), fuse packet and flow features, and optionally return coverage metrics.
 
-    flow_df = pd.read_parquet(flow_file)
-    packet_df = pd.read_parquet(packet_file)
+    Args:
+        flow_file: Path to flow Parquet file or flow DataFrame.
+        packet_file: Path to packet Parquet file or packet DataFrame.
+        output_file: Optional path to save result as Parquet.
+        how: Merge strategy ('left', 'inner', 'outer').
+        return_metrics: If True, returns (fused_df, metrics_dict).
+
+    Returns:
+        fused_df if return_metrics is False, else (fused_df, metrics_dict).
+    """
+    if isinstance(flow_file, pd.DataFrame):
+        flow_df = flow_file
+    else:
+        if not os.path.isfile(flow_file):
+            raise FileNotFoundError(f"Flow file not found: {flow_file}")
+        flow_df = pd.read_parquet(flow_file)
+
+    if isinstance(packet_file, pd.DataFrame):
+        packet_df = packet_file
+    else:
+        if not os.path.isfile(packet_file):
+            raise FileNotFoundError(f"Packet file not found: {packet_file}")
+        packet_df = pd.read_parquet(packet_file)
 
     fused_df, report = fuse_flow_and_packet_dfs(flow_df, packet_df, how=how)
 
     if output_file is not None:
         os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
         fused_df.to_parquet(output_file, index=False)
+
+    if return_metrics:
+        metrics: dict[str, Any] = {
+            "packet_rows_before": report.packet_rows_before,
+            "flow_rows_before": report.flow_rows_before,
+            "packet_host_windows": report.packet_host_windows,
+            "flow_host_windows": report.flow_host_windows,
+            "rows_after_join": report.rows_after_join,
+            "matched_windows": report.matched_windows,
+            "unmatched_packet_windows": report.unmatched_packet_windows,
+            "unmatched_flow_windows": report.unmatched_flow_windows,
+            "packet_coverage": report.packet_coverage_pct,
+            "flow_coverage": report.flow_coverage_pct,
+            "packet_coverage_pct": report.packet_coverage_pct,
+            "flow_coverage_pct": report.flow_coverage_pct,
+            "has_row_multiplication": report.has_row_multiplication,
+            "has_row_loss": report.has_row_loss,
+        }
+        return fused_df, metrics
 
     return fused_df
 

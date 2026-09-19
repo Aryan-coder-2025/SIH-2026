@@ -47,7 +47,7 @@ def normalize_protocol(value: Any) -> int:
     # Handle Scapy packet objects dynamically if passed
     if hasattr(value, "haslayer"):
         try:
-            from scapy.all import IP, TCP, UDP, ICMP  # type: ignore
+            from scapy.all import IP, IPv6, TCP, UDP, ICMP  # type: ignore
 
             if value.haslayer(TCP):
                 return PROTOCOL_TCP
@@ -62,6 +62,14 @@ def normalize_protocol(value: Any) -> int:
                 if proto == PROTOCOL_UDP:
                     return PROTOCOL_UDP
                 if proto == PROTOCOL_ICMP:
+                    return PROTOCOL_ICMP
+            if value.haslayer(IPv6):
+                nh = int(value[IPv6].nh)
+                if nh == PROTOCOL_TCP:
+                    return PROTOCOL_TCP
+                if nh == PROTOCOL_UDP:
+                    return PROTOCOL_UDP
+                if nh == PROTOCOL_ICMP or nh == 58:  # 58 = ICMPv6
                     return PROTOCOL_ICMP
             return PROTOCOL_OTHER
         except Exception:

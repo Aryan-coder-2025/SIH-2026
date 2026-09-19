@@ -38,6 +38,14 @@ CANONICAL_FLOW_FEATURE_NAMES: tuple[str, ...] = (
     "urg_count",
 )
 
+# 20 Core Flow-level features (Aman flow module / NetFlow core representation)
+# ARCHITECTURAL NOTICE: This tuple represents the 20 core FLOW features only.
+# It is NOT the production model input schema. The authoritative production model
+# strictly consumes exactly 41 features (CANONICAL_MODEL_FEATURE_NAMES).
+CANONICAL_MODEL_20_FEATURES: tuple[str, ...] = tuple(
+    f for f in CANONICAL_FLOW_FEATURE_NAMES if f not in ("unique_dst_ip_count", "unique_dst_port_count")
+)
+
 # 19 Packet-level features (Aman pipeline / raw PCAP format)
 CANONICAL_PACKET_FEATURE_NAMES: tuple[str, ...] = (
     "packet_count",

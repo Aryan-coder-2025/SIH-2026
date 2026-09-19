@@ -38,7 +38,7 @@ python -m compileall .
 ```bash
 pytest -v
 ```
-*Expected Result:* All 211 automated tests passed. The repository is ready for GitHub publication with documented limitations around real CSE-CIC-IDS2018 validation and CUDA execution.
+*Expected Result:* All 235 automated tests passed. The repository is ready for GitHub publication with documented limitations around real CSE-CIC-IDS2018 validation and CUDA execution.
 
 ### Step 4: Train Temporal WorldModel Checkpoint
 ```bash

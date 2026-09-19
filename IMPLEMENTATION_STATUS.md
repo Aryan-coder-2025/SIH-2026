@@ -42,6 +42,6 @@ The status of every subsystem is categorized using strictly defined labels:
 
 ## Summary of Acceptance Gate Verification
 
-- **Total Test Suite:** All 211 automated tests passed. The repository is ready for GitHub publication with documented limitations around real CSE-CIC-IDS2018 validation and CUDA execution.
+- **Total Test Suite:** All 235 automated tests passed (including modular PCAP ingestion, packet/flow extraction, fusion metrics, sequence builder, and failure-injection tests). The repository is ready for GitHub publication with documented limitations around real CSE-CIC-IDS2018 validation and CUDA execution.
 - **Pipeline Execution:** `python src/train.py`, `python src/eval/evaluate_system.py`, `python src/eval/ablation.py`, `python run_demo.py` all compile and execute cleanly with 0 errors.
 - **Model Checkpoint Integrity:** Artifact `artifacts/world_model.pt` conforms strictly to the canonical 41-feature contract with embedded schema hash.

@@ -10,7 +10,7 @@ import os
 import sys
 from typing import Any
 
-from scapy.all import IP, TCP, UDP, ICMP, PcapReader  # type: ignore
+from scapy.all import IP, IPv6, TCP, UDP, ICMP, PcapReader  # type: ignore
 
 from src.features.protocol import normalize_protocol
 
@@ -83,6 +83,11 @@ def parse_pcap(
                         row["src_ip"] = str(ip_layer.src)
                         row["dst_ip"] = str(ip_layer.dst)
                         row["protocol_id"] = normalize_protocol(ip_layer.proto)
+                    elif IPv6 in pkt:
+                        ip_layer = pkt[IPv6]
+                        row["src_ip"] = str(ip_layer.src)
+                        row["dst_ip"] = str(ip_layer.dst)
+                        row["protocol_id"] = normalize_protocol(ip_layer.nh)
 
                     # Layer 4 protocol parsing
                     if TCP in pkt:

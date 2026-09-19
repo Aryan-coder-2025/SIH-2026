@@ -14,7 +14,7 @@ ENGINEERING / HEURISTIC NOTICE:
 import statistics
 from typing import Any
 
-from scapy.all import IP, TCP, Raw  # type: ignore
+from scapy.all import IP, IPv6, TCP, UDP, Raw  # type: ignore
 
 PACKET_FEATURE_NAMES: tuple[str, ...] = (
     "packet_count",
@@ -82,7 +82,7 @@ def calculate_packet_features(packets: list[Any]) -> dict[str, float | int]:
         if hasattr(packet, "time"):
             timestamps.append(float(packet.time))
 
-        # IPv4 features
+        # IPv4 / IPv6 features
         if IP in packet:
             ip_layer = packet[IP]
             ttl_values.append(float(ip_layer.ttl))
@@ -90,6 +90,9 @@ def calculate_packet_features(packets: list[Any]) -> dict[str, float | int]:
             # Fragmentation detection (More Fragments flag or non-zero fragment offset)
             if bool(ip_layer.flags.MF) or ip_layer.frag > 0:
                 fragment_count += 1
+        elif IPv6 in packet:
+            ip_layer = packet[IPv6]
+            ttl_values.append(float(getattr(ip_layer, "hlim", 64.0)))
 
         # TCP features
         if TCP in packet:
@@ -98,8 +101,8 @@ def calculate_packet_features(packets: list[Any]) -> dict[str, float | int]:
             destination_ports.append(int(tcp_layer.dport))
 
             # Retransmission heuristic: identical (src_ip, dst_ip, sport, dport, seq)
-            src_ip = str(packet[IP].src) if IP in packet else ""
-            dst_ip = str(packet[IP].dst) if IP in packet else ""
+            src_ip = str(packet[IP].src) if IP in packet else (str(packet[IPv6].src) if IPv6 in packet else "")
+            dst_ip = str(packet[IP].dst) if IP in packet else (str(packet[IPv6].dst) if IPv6 in packet else "")
             tcp_key = (
                 src_ip,
                 dst_ip,
@@ -112,6 +115,8 @@ def calculate_packet_features(packets: list[Any]) -> dict[str, float | int]:
                 retransmission_count += 1
             else:
                 seen_tcp_packets.add(tcp_key)
+        elif UDP in packet:
+            destination_ports.append(int(packet[UDP].dport))
 
         # Payload size
         if Raw in packet:

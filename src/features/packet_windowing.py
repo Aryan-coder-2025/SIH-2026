@@ -7,7 +7,7 @@ Defines temporal windowing functions aligned with canonical project configuratio
 """
 from typing import Any
 
-from scapy.all import IP  # type: ignore
+from scapy.all import IP, IPv6  # type: ignore
 
 WINDOW_SIZE: float = 10.0
 
@@ -74,9 +74,13 @@ def group_packets_by_host_and_window(
     """
     host_windows: dict[tuple[str, int], list[Any]] = {}
     for packet in packets:
-        if IP not in packet:
+        src_ip = ""
+        if IP in packet:
+            src_ip = str(packet[IP].src).strip()
+        elif IPv6 in packet:
+            src_ip = str(packet[IPv6].src).strip()
+        else:
             continue
-        src_ip = str(packet[IP].src).strip()
         if not src_ip:
             continue
         ts = float(getattr(packet, "time", 0.0))

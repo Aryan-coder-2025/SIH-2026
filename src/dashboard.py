@@ -345,15 +345,34 @@ def get_host_forecast(
     }
 
 
+def format_probability(val: float, precision: int = 1) -> str:
+    """
+    Consistently formats probabilistic model outputs as percentages for analyst presentation.
+    Avoids describing non-zero probabilities as exactly 0.0% when rounded down.
+    Retains full numeric float precision internally.
+    """
+    if val == 0.0:
+        return "0.0%"
+    if 0.0 < val < 0.0005:
+        return "< 0.1%"
+    return f"{val:.{precision}%}"
+
+
+def format_prob_with_raw(val: float) -> str:
+    """Returns user-facing percentage alongside full 4-decimal float, e.g. '98.3% (0.9828)'."""
+    pct_str = format_probability(val, precision=1)
+    return f"{pct_str} ({val:.4f})"
+
+
 @st.cache_data
-def get_all_hosts_summary() -> pd.DataFrame:
-    """Dynamically computes the threat summary table across all available hosts."""
+def get_all_hosts_summary(scenario: str = "Attack Episode (Threat Window)") -> pd.DataFrame:
+    """Dynamically computes the threat summary table across all available hosts for the given scenario."""
     if df is None:
         return pd.DataFrame()
     hosts = df["source_host"].unique().tolist()
     summary_rows = []
     for h in hosts:
-        info = get_host_forecast(h, scenario="Attack Episode (Threat Window)", compute_xai=False)
+        info = get_host_forecast(h, scenario=scenario, compute_xai=False)
         if info is not None:
             obs_state = info["observed_state"]
             r_10 = info["forecast_risk_10s"]
@@ -374,8 +393,8 @@ def get_all_hosts_summary() -> pd.DataFrame:
                 {
                     "Host": h,
                     "Observed State": obs_state,
-                    "Forecast (+10s)": f"{r_10:.1%}",
-                    "Forecast (+30s)": f"{r_30:.1%}",
+                    "Forecast (+10s)": format_probability(r_10),
+                    "Forecast (+30s)": format_probability(r_30),
                     "Predicted Stage": stage,
                     "Operational Status": status,
                     "Recommended Action": action,
@@ -401,7 +420,7 @@ def make_clean_line_chart(
             name="Forecast Probability (+10s, +20s, +30s)",
             line=dict(color="#58a6ff", width=2),
             marker=dict(size=7, color="#58a6ff"),
-            text=[f"{val:.1%}" for val in y],
+            text=[format_probability(val) for val in y],
             textposition="top center",
             textfont=dict(color="#c9d1d9", size=11),
         )
@@ -671,8 +690,8 @@ if selected_page == "Overview":
                 </div>
                 <div style="font-size:0.80rem; color:#8b949e; margin-top:0.5rem;">
                     Observed window timestamp: <code>{host_contract['timestamp']}</code><br>
-                    Forecasted +10s risk: <strong style="color:#58a6ff;">{risk_preds[0]:.1%}</strong> &nbsp;|&nbsp; 
-                    Forecasted +30s risk: <strong style="color:#58a6ff;">{risk_preds[2]:.1%}</strong>
+                    Forecasted +10s risk: <strong style="color:#58a6ff;">{format_prob_with_raw(risk_preds[0])}</strong> &nbsp;|&nbsp; 
+                    Forecasted +30s risk: <strong style="color:#58a6ff;">{format_prob_with_raw(risk_preds[2])}</strong>
                 </div>
             </div>
             """,
@@ -701,11 +720,11 @@ if selected_page == "Overview":
                 <div class="analyst-card-title">Predicted Attack Lifecycle Stage</div>
                 <div style="display:flex; justify-content:space-between; align-items:baseline;">
                     <span style="font-size:1.15rem; font-weight:600; color:#e6edf3;">{pred_stage}</span>
-                    <span style="font-size:1.1rem; font-weight:700; color:#58a6ff;">{stage_conf:.1%}</span>
+                    <span style="font-size:1.1rem; font-weight:700; color:#58a6ff;">{format_probability(stage_conf)}</span>
                 </div>
                 <div style="display:flex; gap:1.5rem; margin-top:0.6rem; font-size:0.78rem; border-top:1px solid #21262d; padding-top:0.5rem;">
-                    <div>Model Primary Horizon Risk: <strong style="color:#e6edf3;">{risk_preds[0]:.1%}</strong></div>
-                    <div>MITRE Candidate Confidence: <strong style="color:#e6edf3;">{mapping_conf:.1%}</strong></div>
+                    <div>Model Primary Risk (+10s): <strong style="color:#e6edf3;">{format_prob_with_raw(risk_preds[0])}</strong></div>
+                    <div>Separate ATT&CK Candidate Conf: <strong style="color:#e6edf3;">{format_probability(mapping_conf)}</strong></div>
                 </div>
             </div>
             """,
@@ -742,10 +761,13 @@ if selected_page == "Overview":
 
     st.markdown("---")
 
-    # HOSTS REQUIRING ATTENTION (Completely Data-Driven from model inference)
-    st.markdown("### Hosts Requiring Attention")
-    st.caption("Prioritised ranking of network hosts derived dynamically from temporal model forecasts.")
-    df_hosts_summary = get_all_hosts_summary()
+    # HOSTS REQUIRING ATTENTION (Dynamically evaluated under selected scenario)
+    st.markdown(f"### Hosts Requiring Attention — Scope: {selected_scenario}")
+    st.caption(
+        f"Evaluates all monitored network hosts under the active telemetry scenario mode: **{selected_scenario}**. "
+        "Results update dynamically when the scenario mode changes."
+    )
+    df_hosts_summary = get_all_hosts_summary(scenario=selected_scenario)
     st.dataframe(df_hosts_summary, use_container_width=True, hide_index=True)
 
     st.markdown("---")
@@ -753,20 +775,20 @@ if selected_page == "Overview":
     # FLAGGED NETWORK FLOWS (Driven by actual telemetry slice)
     if host_contract is not None:
         st.markdown(f"### Observed Telemetry Window ({selected_host})")
-        st.caption("Recent network window metrics driving current forecast.")
+        st.caption("Raw network window metrics from the active telemetry slice (unnormalized aggregates per 10-second window; transformed via standard scaler prior to model input).")
         recent_df = host_contract["recent_slice"].copy()
         recent_df["time_str"] = recent_df["timestamp"].dt.strftime("%H:%M:%S")
         cols_show = [c for c in ["time_str", "unique_dst_ports", "flow_count", "syn_count", "bytes_total", "packets_total"] if c in recent_df.columns]
         rename_map = {
-            "time_str": "Timestamp",
-            "unique_dst_ports": "Dst Ports",
-            "flow_count": "Flows",
-            "syn_count": "SYN Pkts",
-            "bytes_total": "Total Bytes",
-            "packets_total": "Total Packets",
+            "time_str": "Timestamp (UTC)",
+            "unique_dst_ports": "Unique Dst Ports (count)",
+            "flow_count": "Flow Count (10s count)",
+            "syn_count": "SYN Packets (count)",
+            "bytes_total": "Total Volume (Bytes)",
+            "packets_total": "Total Packets (count)",
         }
         st.dataframe(
-            recent_df[cols_show].rename(columns=rename_map).tail(6).sort_values("Timestamp", ascending=False),
+            recent_df[cols_show].rename(columns=rename_map).tail(6).sort_values("Timestamp (UTC)", ascending=False),
             use_container_width=True,
             hide_index=True,
         )
@@ -793,9 +815,10 @@ elif selected_page == "Host Analysis":
         # Top summary metrics
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Observed State (T0)", obs_state)
-        c2.metric("Forecast +10s", f"{risk_preds[0]:.1%}")
-        c3.metric("Forecast +20s", f"{risk_preds[1]:.1%}")
-        c4.metric("Forecast +30s", f"{risk_preds[2]:.1%}")
+        c2.metric("Forecast +10s", format_probability(risk_preds[0]))
+        c3.metric("Forecast +20s", format_probability(risk_preds[1]))
+        c4.metric("Forecast +30s", format_probability(risk_preds[2]))
+        st.caption(f"Raw Model Probabilities — +10s: {risk_preds[0]:.4f} | +20s: {risk_preds[1]:.4f} | +30s: {risk_preds[2]:.4f} (Observed state is a ground-truth label, not a forecast probability)")
 
         st.markdown("---")
 
@@ -804,7 +827,22 @@ elif selected_page == "Host Analysis":
         st.caption("The WorldModel consumes these 10 chronological observation windows to project future attack trajectory.")
 
         win_hist_df = pd.DataFrame(host_contract["window_history"])
-        st.dataframe(win_hist_df, use_container_width=True, hide_index=True)
+        win_display_df = win_hist_df.rename(columns={
+            "Window": "Window (Offset)",
+            "Timestamp": "Timestamp (UTC)",
+            "Flows": "Flow Count (10s count)",
+            "SYN Pkts": "SYN Packets (count)",
+            "Dst Ports": "Unique Dst Ports (count)",
+            "Total Bytes": "Total Volume (Bytes)",
+            "Observed State": "Observed State (Ground Truth)",
+        })
+        st.dataframe(win_display_df, use_container_width=True, hide_index=True)
+        st.caption(
+            "**Telemetry Field Definitions:** Values represent raw, unnormalized 10-second window aggregates extracted from host network traffic: "
+            "**Flow Count** (number of distinct flows initiated in 10s), **SYN Packets** (raw count of TCP SYN packets), "
+            "**Unique Dst Ports** (count of distinct destination ports contacted), **Total Volume** (total transfer volume in Bytes), "
+            "and **Observed State** (ground truth label). Telemetry is standardized via StandardScaler before ingestion into the 41-feature WorldModel."
+        )
 
         col_h1, col_h2 = st.columns([1, 1], gap="medium")
 
@@ -866,7 +904,7 @@ elif selected_page == "Host Analysis":
             <div class="analyst-card" style="margin-top:0.25rem;">
                 <div style="display:flex; justify-content:space-between;">
                     <strong>{tech_id}: {tech_name}</strong>
-                    <span class="badge badge-neutral">Conf: {mapping_conf:.1%}</span>
+                    <span class="badge badge-neutral">Conf: {format_probability(mapping_conf)}</span>
                 </div>
                 <div style="font-size:0.80rem; color:#8b949e; margin-top:0.4rem;">
                     <strong>Observed Telemetry Evidence:</strong>
@@ -920,6 +958,14 @@ elif selected_page == "Forecast":
 
     if host_contract is not None:
         risk_preds = host_contract["forecast_risks"]
+        pipe_res = host_contract["pipeline_result"]
+        pred_stage = host_contract["pred_stage"]
+        stage_conf = host_contract["stage_conf"]
+        mitre_data = pipe_res.get("mitre_attack", {})
+        tech_id = mitre_data.get("candidate_technique_id") or "T0000"
+        tech_name = mitre_data.get("candidate_technique_name") or "Nominal / Unmapped"
+        tactic_name = mitre_data.get("candidate_tactic_name") or "Unmapped"
+        mapping_conf = float(mitre_data.get("mapping_confidence") or 0.0)
 
         c1, c2, c3 = st.columns(3)
 
@@ -933,12 +979,17 @@ elif selected_page == "Forecast":
             st.markdown(
                 f"""
             <div class="analyst-card">
-                <div class="analyst-card-title">Forecast +10s</div>
-                <div style="font-size:1.8rem; font-weight:700; color:#58a6ff;">{risk_preds[0]:.4f}</div>
-                <div style="font-size:0.80rem; color:{'#ff7b72' if state_10=='MALICIOUS' else '#3fb950'}; font-weight:600; margin-top:0.2rem;">
-                    State: {state_10}
+                <div class="analyst-card-title">Forecast Horizon: +10s</div>
+                <div style="font-size:1.8rem; font-weight:700; color:#58a6ff;">{format_probability(risk_preds[0])}</div>
+                <div style="font-size:0.80rem; color:#8b949e; margin-top:0.15rem;">
+                    Raw Predicted Risk: <code>{risk_preds[0]:.4f}</code>
                 </div>
-                <div style="font-size:0.75rem; color:#8b949e; margin-top:0.3rem;">Decision Threshold: <code>{th_10:.3f}</code></div>
+                <div style="font-size:0.80rem; color:{'#ff7b72' if state_10=='MALICIOUS' else '#3fb950'}; font-weight:600; margin-top:0.3rem;">
+                    Decision: {state_10}
+                </div>
+                <div style="font-size:0.75rem; color:#8b949e; margin-top:0.3rem;">
+                    Decision Threshold (Validation-Frozen): <code>{th_10:.3f} ({th_10:.1%})</code>
+                </div>
             </div>
             """,
                 unsafe_allow_html=True,
@@ -948,12 +999,17 @@ elif selected_page == "Forecast":
             st.markdown(
                 f"""
             <div class="analyst-card">
-                <div class="analyst-card-title">Forecast +20s</div>
-                <div style="font-size:1.8rem; font-weight:700; color:#58a6ff;">{risk_preds[1]:.4f}</div>
-                <div style="font-size:0.80rem; color:{'#ff7b72' if state_20=='MALICIOUS' else '#3fb950'}; font-weight:600; margin-top:0.2rem;">
-                    State: {state_20}
+                <div class="analyst-card-title">Forecast Horizon: +20s</div>
+                <div style="font-size:1.8rem; font-weight:700; color:#58a6ff;">{format_probability(risk_preds[1])}</div>
+                <div style="font-size:0.80rem; color:#8b949e; margin-top:0.15rem;">
+                    Raw Predicted Risk: <code>{risk_preds[1]:.4f}</code>
                 </div>
-                <div style="font-size:0.75rem; color:#8b949e; margin-top:0.3rem;">Decision Threshold: <code>{th_20:.3f}</code></div>
+                <div style="font-size:0.80rem; color:{'#ff7b72' if state_20=='MALICIOUS' else '#3fb950'}; font-weight:600; margin-top:0.3rem;">
+                    Decision: {state_20}
+                </div>
+                <div style="font-size:0.75rem; color:#8b949e; margin-top:0.3rem;">
+                    Decision Threshold (Validation-Frozen): <code>{th_20:.3f} ({th_20:.1%})</code>
+                </div>
             </div>
             """,
                 unsafe_allow_html=True,
@@ -963,12 +1019,17 @@ elif selected_page == "Forecast":
             st.markdown(
                 f"""
             <div class="analyst-card">
-                <div class="analyst-card-title">Forecast +30s</div>
-                <div style="font-size:1.8rem; font-weight:700; color:#58a6ff;">{risk_preds[2]:.4f}</div>
-                <div style="font-size:0.80rem; color:{'#ff7b72' if state_30=='MALICIOUS' else '#3fb950'}; font-weight:600; margin-top:0.2rem;">
-                    State: {state_30}
+                <div class="analyst-card-title">Forecast Horizon: +30s</div>
+                <div style="font-size:1.8rem; font-weight:700; color:#58a6ff;">{format_probability(risk_preds[2])}</div>
+                <div style="font-size:0.80rem; color:#8b949e; margin-top:0.15rem;">
+                    Raw Predicted Risk: <code>{risk_preds[2]:.4f}</code>
                 </div>
-                <div style="font-size:0.75rem; color:#8b949e; margin-top:0.3rem;">Decision Threshold: <code>{th_30:.3f}</code></div>
+                <div style="font-size:0.80rem; color:{'#ff7b72' if state_30=='MALICIOUS' else '#3fb950'}; font-weight:600; margin-top:0.3rem;">
+                    Decision: {state_30}
+                </div>
+                <div style="font-size:0.75rem; color:#8b949e; margin-top:0.3rem;">
+                    Decision Threshold (Validation-Frozen): <code>{th_30:.3f} ({th_30:.1%})</code>
+                </div>
             </div>
             """,
                 unsafe_allow_html=True,
@@ -1005,12 +1066,55 @@ elif selected_page == "Forecast":
                 {interp_text}
             </div>
             <div style="font-size:0.75rem; color:#8b949e; margin-top:0.5rem;">
-                <em>Note: Conditional probabilistic forecast based on preceding temporal sequence, not a deterministic guarantee.</em>
+                <em>Note: Conditional probabilistic forecast based on preceding temporal sequence, not a deterministic guarantee. Decision thresholds are validation-frozen criteria, distinct from continuous output probabilities.</em>
             </div>
         </div>
         """,
             unsafe_allow_html=True,
         )
+
+        # Architectural Separation Notice & Cards on Forecast Page
+        st.markdown("---")
+        st.markdown("### Model Lifecycle Stage vs. Evidence-Based ATT&CK Mapping")
+        st.caption("Decoupling of direct neural predictions from external heuristic MITRE ATT&CK candidate mapping.")
+        col_fc1, col_fc2 = st.columns(2, gap="medium")
+        with col_fc1:
+            st.markdown(
+                f"""
+                <div class="analyst-card">
+                    <div class="analyst-card-title">1. Neural WorldModel Stage Head</div>
+                    <div style="font-size:1.05rem; font-weight:600; color:#e6edf3;">Predicted Stage: {pred_stage}</div>
+                    <div style="font-size:0.80rem; color:#8b949e; margin-top:0.35rem;">
+                        Classification Confidence: <strong style="color:#58a6ff;">{format_probability(stage_conf)}</strong><br>
+                        Continuous Multi-Horizon Risk: +10s = <strong style="color:#58a6ff;">{format_prob_with_raw(risk_preds[0])}</strong> | +30s = <strong style="color:#58a6ff;">{format_prob_with_raw(risk_preds[2])}</strong>
+                    </div>
+                    <div style="font-size:0.75rem; color:#8b949e; margin-top:0.5rem; border-top:1px solid #21262d; padding-top:0.4rem;">
+                        <em>Direct output from trained PyTorch LSTM checkpoint.</em>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with col_fc2:
+            st.markdown(
+                f"""
+                <div class="analyst-card">
+                    <div class="analyst-card-title">2. Separate Evidence-Based ATT&CK Mapping</div>
+                    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                        <span style="font-size:1.05rem; font-weight:600; color:#e6edf3;">{tech_id}: {tech_name}</span>
+                        <span class="badge badge-neutral">Conf: {format_probability(mapping_conf)}</span>
+                    </div>
+                    <div style="font-size:0.80rem; color:#8b949e; margin-top:0.35rem;">
+                        Candidate Tactic: <strong style="color:#c9d1d9;">{tactic_name}</strong><br>
+                        Mapping Confidence: <strong style="color:#c9d1d9;">{format_probability(mapping_conf)}</strong>
+                    </div>
+                    <div style="font-size:0.75rem; color:#8b949e; margin-top:0.5rem; border-top:1px solid #21262d; padding-top:0.4rem;">
+                        <em>Mapped from observable telemetry heuristics; NOT output by the LSTM.</em>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
     else:
         render_awaiting_execution(selected_host, selected_scenario)
 
@@ -1038,6 +1142,31 @@ elif selected_page == "Evidence & XAI":
     )
 
     if host_contract is not None:
+        obs_state = host_contract["observed_state"]
+        risk_preds = host_contract["forecast_risks"]
+        pred_stage = host_contract["pred_stage"]
+        stage_conf = host_contract["stage_conf"]
+        pipe_res = host_contract["pipeline_result"]
+        mitre_data = pipe_res.get("mitre_attack", {})
+        tech_id = mitre_data.get("candidate_technique_id") or "T0000"
+        mapping_conf = float(mitre_data.get("mapping_confidence") or 0.0)
+
+        badge_cls = "badge-high" if obs_state == "MALICIOUS" else "badge-normal"
+        st.markdown(
+            f"""
+            <div class="analyst-card" style="margin-bottom:1rem; padding:0.6rem 1rem;">
+                <div style="display:flex; flex-wrap:wrap; gap:1.5rem; font-size:0.80rem; align-items:center;">
+                    <div><strong>Target Host:</strong> <code>{selected_host}</code></div>
+                    <div><strong>Observed State (T0):</strong> <span class="badge {badge_cls}">{obs_state}</span></div>
+                    <div><strong>Model Forecast (+10s):</strong> <span style="color:#58a6ff; font-weight:600;">{format_prob_with_raw(risk_preds[0])}</span></div>
+                    <div><strong>Model Stage Head:</strong> <span style="color:#e6edf3; font-weight:600;">{pred_stage} ({format_probability(stage_conf)})</span></div>
+                    <div><strong>Separate ATT&CK Candidate:</strong> <span style="color:#e6edf3; font-weight:600;">{tech_id} (Conf: {format_probability(mapping_conf)})</span></div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
         ig_horizons = host_contract["ig_all_horizons"]
         h_choice = st.selectbox("Select Horizon for Attribution", ["+10s Forecast", "+20s Forecast", "+30s Forecast"], index=0)
         h_idx = 0 if "+10s" in h_choice else (1 if "+20s" in h_choice else 2)
@@ -1067,31 +1196,39 @@ elif selected_page == "Evidence & XAI":
                 rel_error = comp_error / denom
                 is_verified = (rel_error <= 0.20) or (comp_error <= 0.20)
 
-                status_badge = (
-                    '<span class="badge badge-normal">PASS (Within Tolerance)</span>'
+                check_summary = (
+                    "Numerical completeness check: PASS — relative error is within configured tolerance."
                     if is_verified
-                    else '<span class="badge badge-high">FAIL (Exceeds Tolerance)</span>'
+                    else "Numerical completeness check: FAIL — relative error exceeds configured tolerance."
+                )
+                status_badge = (
+                    '<span class="badge badge-normal">PASS</span>'
+                    if is_verified
+                    else '<span class="badge badge-high">FAIL</span>'
                 )
                 status_color = "#3fb950" if is_verified else "#f85149"
 
                 st.markdown(
                     f"""
                 <div class="analyst-card">
-                    <div class="analyst-card-title">Mathematical Completeness Verification</div>
+                    <div class="analyst-card-title">Path-Integrated Gradients Completeness Verification</div>
                     <div style="font-size:0.80rem; color:#c9d1d9; line-height:1.5;">
-                        Path-Integrated Gradients satisfies the Axiom of Completeness:
-                        <br><br>
+                        Axiom of Completeness (Sundararajan et al., 2017):<br>
                         <code>Σ Attributions ≈ F(x) - F(baseline)</code>
                         <br><br>
-                        <strong>Attribution Shape:</strong> <code>(10, 41)</code><br>
+                        A tolerance-based numerical verification confirms that the 50-step Riemann sum approximates the continuous model output difference within the configured relative bound, rather than continuous mathematical equality.
+                        <br><br>
+                        <strong>Attribution Tensor Shape:</strong> <code>(10, 41)</code><br>
                         <strong>Multi-Horizon Tensor:</strong> <code>(3, 10, 41)</code><br>
-                        <strong>Riemann Steps:</strong> 50<br>
+                        <strong>Riemann Integration Steps:</strong> 50<br>
                         <strong>Δ Target (F(x) - F(0)):</strong> <code>{delta_target:+.4f}</code><br>
                         <strong>Σ Attributions:</strong> <code>{attr_sum:+.4f}</code><br>
-                        <strong>Completeness Error:</strong> <code style="color:{status_color};">{comp_error:.5f}</code><br>
-                        <strong>Relative Error:</strong> <code style="color:{status_color};">{rel_error:.2%}</code><br>
-                        <strong>Tolerance Bound:</strong> 0.20 (20% relative Riemann bound)<br>
-                        <strong>Verification Status:</strong> {status_badge}
+                        <strong>Absolute Error (|Δ - Σ|):</strong> <code style="color:{status_color};">{comp_error:.5f}</code><br>
+                        <strong>Relative Error (|Δ - Σ| / max):</strong> <code style="color:{status_color};">{rel_error:.2%}</code><br>
+                        <strong>Configured Relative Tolerance:</strong> <code>0.20 (20.0%)</code><br><br>
+                        <div style="padding:0.4rem 0.6rem; border-radius:3px; background-color:#0d1117; border-left:3px solid {status_color}; margin-top:0.4rem;">
+                            <strong style="color:{status_color};">{check_summary}</strong>
+                        </div>
                     </div>
                 </div>
                 """,
@@ -1156,9 +1293,9 @@ elif selected_page == "MITRE ATT&CK":
                 <div class="analyst-card-title">1. Neural Model Forecast</div>
                 <div style="font-size:1.1rem; font-weight:600; color:#e6edf3;">Predicted Stage: {pred_stage}</div>
                 <div style="font-size:0.80rem; color:#8b949e; margin-top:0.3rem;">
-                    Stage Classification Confidence: <strong style="color:#58a6ff;">{stage_conf:.1%}</strong><br>
-                    Forecasted Risk (+10s): <strong style="color:#58a6ff;">{risk_preds[0]:.1%}</strong> &nbsp;|&nbsp; 
-                    Forecasted Risk (+30s): <strong style="color:#58a6ff;">{risk_preds[2]:.1%}</strong>
+                    Stage Classification Confidence: <strong style="color:#58a6ff;">{format_probability(stage_conf)}</strong> (raw: {stage_conf:.4f})<br>
+                    Forecasted Risk (+10s): <strong style="color:#58a6ff;">{format_prob_with_raw(risk_preds[0])}</strong> &nbsp;|&nbsp; 
+                    Forecasted Risk (+30s): <strong style="color:#58a6ff;">{format_prob_with_raw(risk_preds[2])}</strong>
                 </div>
                 <div style="font-size:0.75rem; color:#8b949e; margin-top:0.5rem; border-top:1px solid #21262d; padding-top:0.4rem;">
                     <em>Note: The LSTM predicts temporal risk progression and lifecycle stages from 10-window sequences.</em>
@@ -1181,10 +1318,10 @@ elif selected_page == "MITRE ATT&CK":
                 <div class="analyst-card-title">2. Evidence-Based ATT&CK Candidate</div>
                 <div style="display:flex; justify-content:space-between; align-items:baseline;">
                     <span style="font-size:1.1rem; font-weight:600; color:#e6edf3;">{tech_id} — {tech_name}</span>
-                    <span class="badge badge-neutral">Conf: {mapping_conf:.1%}</span>
+                    <span class="badge badge-neutral">Conf: {format_probability(mapping_conf)}</span>
                 </div>
                 <div style="font-size:0.80rem; color:#8b949e; margin-top:0.3rem;">
-                    Candidate Tactic: <strong style="color:#c9d1d9;">{tactic_name}</strong>
+                    Candidate Tactic: <strong style="color:#c9d1d9;">{tactic_name}</strong> (raw conf: {mapping_conf:.4f})
                 </div>
                 <div style="font-size:0.75rem; color:#8b949e; margin-top:0.5rem; border-top:1px solid #21262d; padding-top:0.4rem;">
                     <em>Note: Mapped separately from observable network heuristics and top-attributed features.</em>
