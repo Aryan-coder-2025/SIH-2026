@@ -42,16 +42,17 @@ The mapping engine operates strictly on the canonical feature matrix produced up
 
 ## 3. Deterministic Mapping Confidence Scoring
 
-Mapping confidence $C_{\text{mapping}} \in [0.0, 1.0]$ is computed deterministically from observed evidence strength and SHAP feature alignment:
+Mapping confidence $C_{\text{mapping}} \in [0.0, 1.0]$ is computed deterministically from observed evidence strength and feature attribution alignment:
 
-$$C_{\text{mapping}} = w_{\text{model}} \cdot P(\text{forecast\_risk}) + w_{\text{rule}} \cdot \left(\frac{\min(N_{\text{matched}}, 3)}{3}\right) + w_{\text{shap}} \cdot S_{\text{alignment}}$$
+$$C_{\text{mapping}} = w_{\text{model}} \cdot P(\text{forecast\_risk}) + w_{\text{rule}} \cdot \left(\frac{\min(N_{\text{matched}}, 3)}{3}\right) + w_{\text{attr}} \cdot S_{\text{alignment}}$$
 
 Where:
-- $P(\text{forecast\_risk}) \in [0.0, 1.0]$: Maximum forecasted risk from the World Model.
+- $P(\text{forecast\_risk}) \in [0.0, 1.0]$: Maximum forecasted risk from the forecasting model.
 - $N_{\text{matched}}$: Number of active heuristic evidence rules satisfied.
-- $S_{\text{alignment}} \in [0.0, 1.0]$: Fraction of top SHAP features matching candidate technique indicators.
-- Weights: $w_{\text{model}} = 0.40, w_{\text{rule}} = 0.35, w_{\text{shap}} = 0.25$.
+- $S_{\text{alignment}} \in [0.0, 1.0]$: Fraction of top attributed features (via Integrated Gradients) matching candidate technique indicators.
+- Weights: $w_{\text{model}} = 0.40, w_{\text{rule}} = 0.35, w_{\text{attr}} = 0.25$.
 - Result is bounded strictly: $C_{\text{mapping}} \in [0.05, 0.99]$.
+
 
 > [!NOTE]
 > **Semantic Separation:**

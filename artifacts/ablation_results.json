@@ -1,0 +1,212 @@
+{
+  "provenance_status": "SYNTHETIC_DEMONSTRATION_ONLY",
+  "notice": "REAL DATA EXPERIMENT NOT EXECUTED - RAW CSE-CIC-IDS2018 TELEMETRY PENDING EXTRACTION. These controlled ablations were executed on the canonical synthetic integration fixture. The production WorldModel contract remains strictly locked to 41 input features.",
+  "modality_ablations": {
+    "flow_only_22": {
+      "config_name": "flow_only_22",
+      "feature_count": 22,
+      "history_length": 10,
+      "mean_test_f1": 0.8097,
+      "horizons": {
+        "+10s": {
+          "f1": 0.8837,
+          "precision": 0.9048,
+          "recall": 0.8636,
+          "fpr": 0.0164,
+          "threshold": 0.30000000000000004
+        },
+        "+20s": {
+          "f1": 0.8182,
+          "precision": 0.8182,
+          "recall": 0.8182,
+          "fpr": 0.0328,
+          "threshold": 0.25
+        },
+        "+30s": {
+          "f1": 0.7273,
+          "precision": 0.7273,
+          "recall": 0.7273,
+          "fpr": 0.0492,
+          "threshold": 0.225
+        }
+      },
+      "validation_thresholds": [
+        0.30000000000000004,
+        0.25,
+        0.225
+      ]
+    },
+    "packet_only_19": {
+      "config_name": "packet_only_19",
+      "feature_count": 19,
+      "history_length": 10,
+      "mean_test_f1": 0.7915,
+      "horizons": {
+        "+10s": {
+          "f1": 0.8889,
+          "precision": 0.8696,
+          "recall": 0.9091,
+          "fpr": 0.0246,
+          "threshold": 0.1
+        },
+        "+20s": {
+          "f1": 0.8,
+          "precision": 0.7826,
+          "recall": 0.8182,
+          "fpr": 0.041,
+          "threshold": 0.1
+        },
+        "+30s": {
+          "f1": 0.6857,
+          "precision": 0.9231,
+          "recall": 0.5455,
+          "fpr": 0.0082,
+          "threshold": 0.8250000000000001
+        }
+      },
+      "validation_thresholds": [
+        0.1,
+        0.1,
+        0.8250000000000001
+      ]
+    },
+    "multimodal_fusion_41": {
+      "config_name": "multimodal_fusion_41",
+      "feature_count": 41,
+      "history_length": 10,
+      "mean_test_f1": 0.81,
+      "horizons": {
+        "+10s": {
+          "f1": 0.8837,
+          "precision": 0.9048,
+          "recall": 0.8636,
+          "fpr": 0.0164,
+          "threshold": 0.1
+        },
+        "+20s": {
+          "f1": 0.7907,
+          "precision": 0.8095,
+          "recall": 0.7727,
+          "fpr": 0.0328,
+          "threshold": 0.1
+        },
+        "+30s": {
+          "f1": 0.7556,
+          "precision": 0.7391,
+          "recall": 0.7727,
+          "fpr": 0.0492,
+          "threshold": 0.1
+        }
+      },
+      "validation_thresholds": [
+        0.1,
+        0.1,
+        0.1
+      ]
+    }
+  },
+  "history_depth_ablations": {
+    "history_1_window": {
+      "config_name": "history_1_window",
+      "feature_count": 41,
+      "history_length": 1,
+      "mean_test_f1": 0.8614,
+      "horizons": {
+        "+10s": {
+          "f1": 0.9091,
+          "precision": 0.9091,
+          "recall": 0.9091,
+          "fpr": 0.0114,
+          "threshold": 0.675
+        },
+        "+20s": {
+          "f1": 0.875,
+          "precision": 0.8077,
+          "recall": 0.9545,
+          "fpr": 0.0284,
+          "threshold": 0.17500000000000002
+        },
+        "+30s": {
+          "f1": 0.8,
+          "precision": 0.7143,
+          "recall": 0.9091,
+          "fpr": 0.0455,
+          "threshold": 0.1
+        }
+      },
+      "validation_thresholds": [
+        0.675,
+        0.17500000000000002,
+        0.1
+      ]
+    },
+    "history_5_windows": {
+      "config_name": "history_5_windows",
+      "feature_count": 41,
+      "history_length": 5,
+      "mean_test_f1": 0.8276,
+      "horizons": {
+        "+10s": {
+          "f1": 0.9091,
+          "precision": 0.9091,
+          "recall": 0.9091,
+          "fpr": 0.0132,
+          "threshold": 0.1
+        },
+        "+20s": {
+          "f1": 0.8182,
+          "precision": 0.8182,
+          "recall": 0.8182,
+          "fpr": 0.0263,
+          "threshold": 0.2
+        },
+        "+30s": {
+          "f1": 0.7556,
+          "precision": 0.7391,
+          "recall": 0.7727,
+          "fpr": 0.0395,
+          "threshold": 0.2
+        }
+      },
+      "validation_thresholds": [
+        0.1,
+        0.2,
+        0.2
+      ]
+    },
+    "history_10_windows": {
+      "config_name": "history_10_windows",
+      "feature_count": 41,
+      "history_length": 10,
+      "mean_test_f1": 0.81,
+      "horizons": {
+        "+10s": {
+          "f1": 0.8837,
+          "precision": 0.9048,
+          "recall": 0.8636,
+          "fpr": 0.0164,
+          "threshold": 0.1
+        },
+        "+20s": {
+          "f1": 0.7907,
+          "precision": 0.8095,
+          "recall": 0.7727,
+          "fpr": 0.0328,
+          "threshold": 0.1
+        },
+        "+30s": {
+          "f1": 0.7556,
+          "precision": 0.7391,
+          "recall": 0.7727,
+          "fpr": 0.0492,
+          "threshold": 0.1
+        }
+      },
+      "validation_thresholds": [
+        0.1,
+        0.1,
+        0.1
+      ]
+    }
+  }
+}

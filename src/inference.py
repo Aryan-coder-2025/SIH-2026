@@ -20,11 +20,19 @@ import torch
 try:
     from src.config import get_temporal_config
     from src.model import WorldModel
-    from src.schemas.features import CANONICAL_MODEL_FEATURE_NAMES, validate_feature_names
+    from src.schemas.features import (
+        CANONICAL_MODEL_FEATURE_NAMES,
+        CANONICAL_SCHEMA_HASH,
+        validate_feature_names,
+    )
 except ImportError:
     from config import get_temporal_config  # type: ignore
     from model import WorldModel  # type: ignore
-    from schemas.features import CANONICAL_MODEL_FEATURE_NAMES, validate_feature_names  # type: ignore
+    from schemas.features import (  # type: ignore
+        CANONICAL_MODEL_FEATURE_NAMES,
+        CANONICAL_SCHEMA_HASH,
+        validate_feature_names,
+    )
 
 # ============================================================
 # CONFIG
@@ -48,6 +56,7 @@ def validate_checkpoint_contract(checkpoint: dict[str, Any], feature_order: Sequ
 
     expected = {
         "project_id": "SIH26153",
+        "schema_hash": CANONICAL_SCHEMA_HASH,
         "feature_count": len(canonical_order),
         "input_size": len(canonical_order),
         "sequence_length": TEMPORAL_CONFIG.history_length,
@@ -80,7 +89,7 @@ def load_artifacts(artifact_dir: Path | str = ARTIFACT_DIR):
     if not checkpoint_path.is_file():
         raise FileNotFoundError(f"Model checkpoint not found: {checkpoint_path}")
 
-    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
 
     with open(art_path / "feature_order.json", "r", encoding="utf-8") as f:
         feature_order = json.load(f)

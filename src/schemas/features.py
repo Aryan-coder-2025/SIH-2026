@@ -160,3 +160,18 @@ def validate_feature_names(
             )
 
     return cleaned_names
+
+
+import hashlib
+
+
+def compute_schema_hash(feature_names: Sequence[str]) -> str:
+    """
+    Compute a deterministic SHA-256 hash representing the feature schema and order.
+    """
+    canonical_repr = ",".join(str(f).strip() for f in feature_names)
+    return hashlib.sha256(canonical_repr.encode("utf-8")).hexdigest()
+
+
+CANONICAL_SCHEMA_HASH: str = compute_schema_hash(CANONICAL_MODEL_FEATURE_NAMES)
+

@@ -1,0 +1,171 @@
+{
+  "ledger_type": "tamper_evident_hash_chained_audit_ledger",
+  "blockchain_consensus_implemented": false,
+  "block_count": 8,
+  "chain": [
+    {
+      "index": 0,
+      "timestamp": 1789763344.3374546,
+      "record_id": "rec_init_baseline_w000",
+      "payload": {
+        "host_id": "192.168.10.10",
+        "window_id": 0,
+        "timestamp": "2026-09-18T08:00:00+00:00",
+        "observed_state": "BENIGN",
+        "forecast": [
+          0.0001,
+          0.0002,
+          0.0002
+        ],
+        "predicted_stage": "Benign",
+        "mitre_technique": null,
+        "notes": "Baseline sensor initialization - quiescent network state"
+      },
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "block_hash": "5b1d50b8e3a8ec42e40189b84c6349ccd331a7c05f05444b31729cee3b718d97"
+    },
+    {
+      "index": 1,
+      "timestamp": 1789763344.3374546,
+      "record_id": "rec_192.168.10.10_w035_discovery",
+      "payload": {
+        "host_id": "192.168.10.10",
+        "window_id": 35,
+        "timestamp": "2026-09-18T08:05:50+00:00",
+        "observed_state": "BENIGN",
+        "forecast": [
+          0.354,
+          0.421,
+          0.485
+        ],
+        "predicted_stage": "Discovery",
+        "mitre_technique": "T1046",
+        "notes": "Precursor port scanning activity detected via sequential SYN bursts"
+      },
+      "previous_hash": "5b1d50b8e3a8ec42e40189b84c6349ccd331a7c05f05444b31729cee3b718d97",
+      "block_hash": "84c0a828c67a749b73bbadd403d883ba0398757dc0ae2840cc4ead103ae6fb01"
+    },
+    {
+      "index": 2,
+      "timestamp": 1789763344.3374546,
+      "record_id": "rec_192.168.10.10_w060_impact",
+      "payload": {
+        "host_id": "192.168.10.10",
+        "window_id": 60,
+        "timestamp": "2026-09-18T08:10:00+00:00",
+        "observed_state": "MALICIOUS",
+        "forecast": [
+          0.9828,
+          0.985,
+          0.9784
+        ],
+        "predicted_stage": "Impact",
+        "mitre_technique": "T1046",
+        "notes": "High volume SYN flood and sustained destination port exhaustion"
+      },
+      "previous_hash": "84c0a828c67a749b73bbadd403d883ba0398757dc0ae2840cc4ead103ae6fb01",
+      "block_hash": "b6dec832c57e6d23661ba7055ed81519e846f1bf9106d32b2f687bb93730078a"
+    },
+    {
+      "index": 3,
+      "timestamp": 1789763344.3374546,
+      "record_id": "rec_192.168.10.11_w010_benign",
+      "payload": {
+        "host_id": "192.168.10.11",
+        "window_id": 10,
+        "timestamp": "2026-09-18T08:01:40+00:00",
+        "observed_state": "BENIGN",
+        "forecast": [
+          0.0001,
+          0.0001,
+          0.0002
+        ],
+        "predicted_stage": "Benign",
+        "mitre_technique": null,
+        "notes": "Routine web browsing and internal DNS query traffic"
+      },
+      "previous_hash": "b6dec832c57e6d23661ba7055ed81519e846f1bf9106d32b2f687bb93730078a",
+      "block_hash": "cd5171b9430e922e5c57322f882acad5f777602c377f2968ca90c768cf3acd58"
+    },
+    {
+      "index": 4,
+      "timestamp": 1789791983.4287524,
+      "record_id": "rec_192.168.10.10_w054_attack",
+      "payload": {
+        "host_id": "192.168.10.10",
+        "window_id": 54,
+        "timestamp": "2026-09-18 08:09:00+00:00",
+        "observed_state": "MALICIOUS",
+        "forecast": [
+          0.9828078746795654,
+          0.9850346446037292,
+          0.9783867597579956
+        ],
+        "predicted_stage": "Impact",
+        "mitre_technique": "T1046"
+      },
+      "previous_hash": "cd5171b9430e922e5c57322f882acad5f777602c377f2968ca90c768cf3acd58",
+      "block_hash": "603ae493387632aab0aebebcab09c912f7f1abfee8604ea4b87e11f6678d0053"
+    },
+    {
+      "index": 5,
+      "timestamp": 1789792023.167229,
+      "record_id": "rec_192.168.10.10_w009_benign",
+      "payload": {
+        "host_id": "192.168.10.10",
+        "window_id": 9,
+        "timestamp": "2026-09-18 08:01:30+00:00",
+        "observed_state": "BENIGN",
+        "forecast": [
+          1.8838576352209202e-06,
+          1.4107257811701857e-05,
+          1.1643540346994996e-05
+        ],
+        "predicted_stage": "Benign",
+        "mitre_technique": null
+      },
+      "previous_hash": "603ae493387632aab0aebebcab09c912f7f1abfee8604ea4b87e11f6678d0053",
+      "block_hash": "5a57b9621f3d40636e0437a39d1d04d5ce01d5e0b397de7994d974ab9398ecf0"
+    },
+    {
+      "index": 6,
+      "timestamp": 1789793060.9375484,
+      "record_id": "rec_192.168.10.10_w054_attack_1",
+      "payload": {
+        "host_id": "192.168.10.10",
+        "window_id": 54,
+        "timestamp": "2026-09-18 08:09:00+00:00",
+        "observed_state": "MALICIOUS",
+        "forecast": [
+          0.9828078746795654,
+          0.9850346446037292,
+          0.9783867597579956
+        ],
+        "predicted_stage": "Impact",
+        "mitre_technique": "T1046"
+      },
+      "previous_hash": "5a57b9621f3d40636e0437a39d1d04d5ce01d5e0b397de7994d974ab9398ecf0",
+      "block_hash": "4ba4ff3a3d6c6d4feb796053e313b9b7a7c37ab6d8a6e6945410d63103380ca9"
+    },
+    {
+      "index": 7,
+      "timestamp": 1789793080.8208354,
+      "record_id": "rec_192.168.10.10_w009_benign_1",
+      "payload": {
+        "host_id": "192.168.10.10",
+        "window_id": 9,
+        "timestamp": "2026-09-18 08:01:30+00:00",
+        "observed_state": "BENIGN",
+        "forecast": [
+          1.8838576352209202e-06,
+          1.4107257811701857e-05,
+          1.1643540346994996e-05
+        ],
+        "predicted_stage": "Benign",
+        "mitre_technique": null
+      },
+      "previous_hash": "4ba4ff3a3d6c6d4feb796053e313b9b7a7c37ab6d8a6e6945410d63103380ca9",
+      "block_hash": "312c9e0ebef08c9e46b6e0f92c971475ec547b03737f9c1c0c9cd201bddcae82"
+    }
+  ]
+}

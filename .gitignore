@@ -14,11 +14,14 @@ env/
 
 # Datasets and large data dumps
 data/raw/
-data/processed/
+data/processed/*
+!data/processed/feature_matrix.parquet
 *.csv
+!data/mock/canonical_feature_matrix.csv
 *.pcap
 *.pcapng
 *.parquet
+!data/processed/feature_matrix.parquet
 *.binetflow
 
 # PyTorch models & binary checkpoints
@@ -29,7 +32,8 @@ models/*.pt
 
 # OS / editor
 .DS_Store
-.vscode/
+.vscode/*
+!.vscode/launch.json
 .idea/
 
 # Keeping required project directories in git

@@ -1,0 +1,376 @@
+{
+  "host_id": "192.168.10.10",
+  "window_id": 9,
+  "timestamp": "2026-09-18 08:01:30+00:00",
+  "forecast": {
+    "observed_state": "BENIGN",
+    "forecast_risk_10s": 0.0,
+    "forecast_risk_20s": 0.0,
+    "forecast_risk_30s": 0.0,
+    "current_forecast_risk": 0.0,
+    "predicted_risk_30s": 0.0,
+    "urgency_level": "LOW",
+    "predicted_stage": "Benign",
+    "risk_timeline": [
+      {
+        "offset_seconds": 10,
+        "risk": 0.0
+      },
+      {
+        "offset_seconds": 20,
+        "risk": 0.0
+      },
+      {
+        "offset_seconds": 30,
+        "risk": 0.0
+      }
+    ]
+  },
+  "mitre_attack": {
+    "is_mapped": false,
+    "candidate_technique_id": null,
+    "candidate_technique_name": "Unmapped Anomalous Telemetry",
+    "candidate_tactic_name": null,
+    "candidate_tactic_id": null,
+    "observed_behaviour": "unclassified anomalous network telemetry",
+    "mapping_confidence": 0.0,
+    "observed_evidence": [
+      "Observed feature deviation did not satisfy heuristic threshold criteria for a specific technique."
+    ],
+    "rationale": "Elevated malicious risk forecasted, but observed evidence is insufficient to defensibly map to a specific MITRE ATT&CK technique.",
+    "attack_version": "v15.1",
+    "mapping_version": "2026.09.10-r1",
+    "mitre": "UNMAPPED",
+    "technique_name": "Unmapped Anomalous Telemetry",
+    "tactic": "Unspecified",
+    "tactic_id": "TA0000",
+    "behaviour": "unclassified anomalous network telemetry",
+    "confidence": 0.0,
+    "evidence": [
+      "Observed feature deviation did not satisfy heuristic threshold criteria for a specific technique."
+    ]
+  },
+  "evidence": {
+    "observed_heuristics": [
+      "No evidence heuristics triggered across the temporal observation window."
+    ],
+    "is_sufficient_evidence": false,
+    "rules_matched": 0,
+    "evidence_details": []
+  },
+  "explainability": {
+    "primary_horizon": {
+      "horizon_seconds": 20,
+      "predicted_risk": 0.0,
+      "urgency_level": "LOW",
+      "top_features": [
+        {
+          "feature": "unique_dst_ip_count",
+          "display_name": "Destination IP Breadth",
+          "contribution": -0.2202,
+          "direction": "down",
+          "human_text": "Traffic focused on a single target IP",
+          "most_active_window": 9,
+          "relative_time_offset": "0s (current window)"
+        },
+        {
+          "feature": "payload_max",
+          "display_name": "Maximum Payload Size",
+          "contribution": -0.2165,
+          "direction": "down",
+          "human_text": "Small maximum packet sizes",
+          "most_active_window": 1,
+          "relative_time_offset": "-80s"
+        },
+        {
+          "feature": "ttl_std",
+          "display_name": "TTL Variation",
+          "contribution": -0.2024,
+          "direction": "down",
+          "human_text": "Consistent routing path observed",
+          "most_active_window": 1,
+          "relative_time_offset": "-80s"
+        },
+        {
+          "feature": "tcp_window_std",
+          "display_name": "TCP Window Jitter",
+          "contribution": -0.1973,
+          "direction": "down",
+          "human_text": "Uniform TCP window",
+          "most_active_window": 9,
+          "relative_time_offset": "0s (current window)"
+        },
+        {
+          "feature": "udp_flow_ratio",
+          "display_name": "UDP Traffic Ratio",
+          "contribution": -0.1872,
+          "direction": "down",
+          "human_text": "Low proportion of UDP traffic",
+          "most_active_window": 9,
+          "relative_time_offset": "0s (current window)"
+        }
+      ],
+      "readable_bullet_points": [
+        "1. Destination IP Breadth \u2193 (-0.22) [window: 0s (current window)]",
+        "2. Maximum Payload Size \u2193 (-0.22) [window: -80s]",
+        "3. TTL Variation \u2193 (-0.20) [window: -80s]",
+        "4. TCP Window Jitter \u2193 (-0.20) [window: 0s (current window)]",
+        "5. UDP Traffic Ratio \u2193 (-0.19) [window: 0s (current window)]"
+      ],
+      "summary_text": "Forecasted risk at +20s (LOW 0%) is primarily driven by Destination IP Breadth and Maximum Payload Size."
+    },
+    "horizons": [
+      {
+        "horizon_seconds": 10,
+        "predicted_risk": 0.0,
+        "urgency_level": "LOW",
+        "top_features": [
+          {
+            "feature": "unique_dst_ip_count",
+            "display_name": "Destination IP Breadth",
+            "contribution": -0.3084,
+            "direction": "down",
+            "human_text": "Traffic focused on a single target IP",
+            "most_active_window": 1,
+            "relative_time_offset": "-80s"
+          },
+          {
+            "feature": "payload_max",
+            "display_name": "Maximum Payload Size",
+            "contribution": -0.3063,
+            "direction": "down",
+            "human_text": "Small maximum packet sizes",
+            "most_active_window": 1,
+            "relative_time_offset": "-80s"
+          },
+          {
+            "feature": "ttl_std",
+            "display_name": "TTL Variation",
+            "contribution": -0.2866,
+            "direction": "down",
+            "human_text": "Consistent routing path observed",
+            "most_active_window": 1,
+            "relative_time_offset": "-80s"
+          },
+          {
+            "feature": "tcp_window_std",
+            "display_name": "TCP Window Jitter",
+            "contribution": -0.2762,
+            "direction": "down",
+            "human_text": "Uniform TCP window",
+            "most_active_window": 9,
+            "relative_time_offset": "0s (current window)"
+          },
+          {
+            "feature": "payload_std",
+            "display_name": "Payload Size Variance",
+            "contribution": -0.2511,
+            "direction": "down",
+            "human_text": "Fixed-size packet transfers",
+            "most_active_window": 1,
+            "relative_time_offset": "-80s"
+          }
+        ],
+        "readable_bullet_points": [
+          "1. Destination IP Breadth \u2193 (-0.31) [window: -80s]",
+          "2. Maximum Payload Size \u2193 (-0.31) [window: -80s]",
+          "3. TTL Variation \u2193 (-0.29) [window: -80s]",
+          "4. TCP Window Jitter \u2193 (-0.28) [window: 0s (current window)]",
+          "5. Payload Size Variance \u2193 (-0.25) [window: -80s]"
+        ],
+        "summary_text": "Forecasted risk at +10s (LOW 0%) is primarily driven by Destination IP Breadth and Maximum Payload Size."
+      },
+      {
+        "horizon_seconds": 20,
+        "predicted_risk": 0.0,
+        "urgency_level": "LOW",
+        "top_features": [
+          {
+            "feature": "unique_dst_ip_count",
+            "display_name": "Destination IP Breadth",
+            "contribution": -0.2202,
+            "direction": "down",
+            "human_text": "Traffic focused on a single target IP",
+            "most_active_window": 9,
+            "relative_time_offset": "0s (current window)"
+          },
+          {
+            "feature": "payload_max",
+            "display_name": "Maximum Payload Size",
+            "contribution": -0.2165,
+            "direction": "down",
+            "human_text": "Small maximum packet sizes",
+            "most_active_window": 1,
+            "relative_time_offset": "-80s"
+          },
+          {
+            "feature": "ttl_std",
+            "display_name": "TTL Variation",
+            "contribution": -0.2024,
+            "direction": "down",
+            "human_text": "Consistent routing path observed",
+            "most_active_window": 1,
+            "relative_time_offset": "-80s"
+          },
+          {
+            "feature": "tcp_window_std",
+            "display_name": "TCP Window Jitter",
+            "contribution": -0.1973,
+            "direction": "down",
+            "human_text": "Uniform TCP window",
+            "most_active_window": 9,
+            "relative_time_offset": "0s (current window)"
+          },
+          {
+            "feature": "udp_flow_ratio",
+            "display_name": "UDP Traffic Ratio",
+            "contribution": -0.1872,
+            "direction": "down",
+            "human_text": "Low proportion of UDP traffic",
+            "most_active_window": 9,
+            "relative_time_offset": "0s (current window)"
+          }
+        ],
+        "readable_bullet_points": [
+          "1. Destination IP Breadth \u2193 (-0.22) [window: 0s (current window)]",
+          "2. Maximum Payload Size \u2193 (-0.22) [window: -80s]",
+          "3. TTL Variation \u2193 (-0.20) [window: -80s]",
+          "4. TCP Window Jitter \u2193 (-0.20) [window: 0s (current window)]",
+          "5. UDP Traffic Ratio \u2193 (-0.19) [window: 0s (current window)]"
+        ],
+        "summary_text": "Forecasted risk at +20s (LOW 0%) is primarily driven by Destination IP Breadth and Maximum Payload Size."
+      },
+      {
+        "horizon_seconds": 30,
+        "predicted_risk": 0.0,
+        "urgency_level": "LOW",
+        "top_features": [
+          {
+            "feature": "udp_flow_ratio",
+            "display_name": "UDP Traffic Ratio",
+            "contribution": -0.2624,
+            "direction": "down",
+            "human_text": "Low proportion of UDP traffic",
+            "most_active_window": 9,
+            "relative_time_offset": "0s (current window)"
+          },
+          {
+            "feature": "unique_dst_ip_count",
+            "display_name": "Destination IP Breadth",
+            "contribution": -0.2408,
+            "direction": "down",
+            "human_text": "Traffic focused on a single target IP",
+            "most_active_window": 9,
+            "relative_time_offset": "0s (current window)"
+          },
+          {
+            "feature": "payload_max",
+            "display_name": "Maximum Payload Size",
+            "contribution": -0.2326,
+            "direction": "down",
+            "human_text": "Small maximum packet sizes",
+            "most_active_window": 9,
+            "relative_time_offset": "0s (current window)"
+          },
+          {
+            "feature": "ttl_std",
+            "display_name": "TTL Variation",
+            "contribution": -0.2199,
+            "direction": "down",
+            "human_text": "Consistent routing path observed",
+            "most_active_window": 9,
+            "relative_time_offset": "0s (current window)"
+          },
+          {
+            "feature": "tcp_window_std",
+            "display_name": "TCP Window Jitter",
+            "contribution": -0.2143,
+            "direction": "down",
+            "human_text": "Uniform TCP window",
+            "most_active_window": 9,
+            "relative_time_offset": "0s (current window)"
+          }
+        ],
+        "readable_bullet_points": [
+          "1. UDP Traffic Ratio \u2193 (-0.26) [window: 0s (current window)]",
+          "2. Destination IP Breadth \u2193 (-0.24) [window: 0s (current window)]",
+          "3. Maximum Payload Size \u2193 (-0.23) [window: 0s (current window)]",
+          "4. TTL Variation \u2193 (-0.22) [window: 0s (current window)]",
+          "5. TCP Window Jitter \u2193 (-0.21) [window: 0s (current window)]"
+        ],
+        "summary_text": "Forecasted risk at +30s (LOW 0%) is primarily driven by UDP Traffic Ratio and Destination IP Breadth."
+      }
+    ],
+    "top_features": [
+      {
+        "feature": "unique_dst_ip_count",
+        "display_name": "Destination IP Breadth",
+        "contribution": -0.2202,
+        "direction": "down",
+        "human_text": "Traffic focused on a single target IP",
+        "most_active_window": 9,
+        "relative_time_offset": "0s (current window)"
+      },
+      {
+        "feature": "payload_max",
+        "display_name": "Maximum Payload Size",
+        "contribution": -0.2165,
+        "direction": "down",
+        "human_text": "Small maximum packet sizes",
+        "most_active_window": 1,
+        "relative_time_offset": "-80s"
+      },
+      {
+        "feature": "ttl_std",
+        "display_name": "TTL Variation",
+        "contribution": -0.2024,
+        "direction": "down",
+        "human_text": "Consistent routing path observed",
+        "most_active_window": 1,
+        "relative_time_offset": "-80s"
+      },
+      {
+        "feature": "tcp_window_std",
+        "display_name": "TCP Window Jitter",
+        "contribution": -0.1973,
+        "direction": "down",
+        "human_text": "Uniform TCP window",
+        "most_active_window": 9,
+        "relative_time_offset": "0s (current window)"
+      },
+      {
+        "feature": "udp_flow_ratio",
+        "display_name": "UDP Traffic Ratio",
+        "contribution": -0.1872,
+        "direction": "down",
+        "human_text": "Low proportion of UDP traffic",
+        "most_active_window": 9,
+        "relative_time_offset": "0s (current window)"
+      }
+    ],
+    "readable_bullet_points": [
+      "1. Destination IP Breadth \u2193 (-0.22) [window: 0s (current window)]",
+      "2. Maximum Payload Size \u2193 (-0.22) [window: -80s]",
+      "3. TTL Variation \u2193 (-0.20) [window: -80s]",
+      "4. TCP Window Jitter \u2193 (-0.20) [window: 0s (current window)]",
+      "5. UDP Traffic Ratio \u2193 (-0.19) [window: 0s (current window)]"
+    ],
+    "summary_text": "Forecasted risk at +20s (LOW 0%) is primarily driven by Destination IP Breadth and Maximum Payload Size."
+  },
+  "recommendations": [
+    {
+      "action_type": "Investigation",
+      "priority": "High",
+      "title": "Perform General Host & Network Telemetry Audit",
+      "description": "Forecast indicates elevated risk though specific MITRE technique signature is unmapped. Capture live network flows and inspect anomalous process trees.",
+      "command_example": "tcpdump -i any -c 500 -nn ; top -b -n 1 | head -n 20"
+    },
+    {
+      "action_type": "Containment",
+      "priority": "Medium",
+      "title": "Increase Telemetry Polling Rate & Monitor Host Alerts",
+      "description": "Enable verbose packet tracing and alert SOC tier-2 analysts for continued temporal observation.",
+      "command_example": "systemctl status auditd"
+    }
+  ]
+}

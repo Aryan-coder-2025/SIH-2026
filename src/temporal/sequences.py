@@ -443,7 +443,12 @@ def build_sequences_from_dataframe(
     risk_column: str = "is_malicious",
     stage_column: str = "stage",
     strict_continuity: bool = True,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    return_current_risk: bool = False,
+    history_length: int | None = None,
+    forecast_horizon: int | None = None,
+    scaler: Any = None,
+    stage_encoder: Any = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Authoritative DataFrame adapter for temporal sequence construction.
 
@@ -457,7 +462,13 @@ def build_sequences_from_dataframe(
         X: shape (samples, sequence_length, num_features)
         y_risk: shape (samples, horizon)
         y_stage: shape (samples,)
+        y_current_risk (if return_current_risk=True): shape (samples,) - risk at time t (last historical window)
     """
+    if history_length is not None:
+        sequence_length = history_length
+    if forecast_horizon is not None:
+        horizon = forecast_horizon
+
     cleaned_features = validate_feature_names(feature_columns)
     temporal_cfg = get_temporal_config()
     expected_step = timedelta(seconds=temporal_cfg.window_seconds)
@@ -480,6 +491,7 @@ def build_sequences_from_dataframe(
     X_list: list[np.ndarray] = []
     y_risk_list: list[np.ndarray] = []
     y_stage_list: list[Any] = []
+    current_risk_list: list[float] = []
 
     for _, group in df_clean.groupby(entity_column, sort=False):
         group_sorted = group.sort_values(timestamp_column).reset_index(drop=True)
@@ -514,16 +526,27 @@ def build_sequences_from_dataframe(
             future_end = future_start + horizon
             future_risk = risk_vals[future_start:future_end]
             future_stage = stage_vals[future_start]
+            current_risk_at_t = float(risk_vals[i + sequence_length - 1])
 
             X_list.append(X_seq)
             y_risk_list.append(future_risk)
             y_stage_list.append(future_stage)
-
-    if not X_list:
-        raise ValueError("No sequences could be created. Check sequence length and data size.")
+            current_risk_list.append(current_risk_at_t)
 
     X = np.asarray(X_list, dtype=np.float32)
     y_risk = np.asarray(y_risk_list, dtype=np.float32)
     y_stage = np.asarray(y_stage_list)
 
+    if scaler is not None:
+        orig_shape = X.shape
+        X = scaler.transform(X.reshape(-1, orig_shape[-1])).reshape(orig_shape)
+
+    if stage_encoder is not None:
+        y_stage = stage_encoder.transform(y_stage)
+
+    if return_current_risk:
+        y_current = np.asarray(current_risk_list, dtype=np.float32)
+        return X, y_risk, y_stage, y_current
+
     return X, y_risk, y_stage
+

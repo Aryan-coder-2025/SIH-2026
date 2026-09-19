@@ -1,0 +1,261 @@
+{
+  "_quarantine_provenance": {
+    "status": "SYNTHETIC_DEMONSTRATION_ONLY",
+    "dataset": "CANONICAL_SYNTHETIC_INTEGRATION_DATA",
+    "warning": "REAL DATA EXPERIMENT NOT EXECUTED - RAW CSE-CIC-IDS2018 TELEMETRY PENDING EXTRACTION. This artifact documents end-to-end integration and architectural verification only. Official benchmark performance on real CSE-CIC-IDS2018 network traffic is pending full raw dataset extraction.",
+    "generated_by": "src/eval/evaluate_system.py",
+    "num_test_sequences": 144,
+    "num_train_sequences": 936,
+    "num_val_sequences": 144,
+    "canonical_features": 41,
+    "baseline_input_features": 410
+  },
+  "class_imbalance": {
+    "train": {
+      "positive": 435,
+      "negative": 2373,
+      "ratio": 0.1833
+    },
+    "val": {
+      "positive": 78,
+      "negative": 354,
+      "ratio": 0.2203
+    },
+    "test": {
+      "positive": 66,
+      "negative": 366,
+      "ratio": 0.1803
+    }
+  },
+  "frozen_thresholds": {
+    "10": 0.05,
+    "20": 0.9,
+    "30": 0.75
+  },
+  "world_model": {
+    "10": {
+      "horizon_seconds": 10,
+      "threshold": 0.05,
+      "precision": 0.913,
+      "recall": 0.9545,
+      "f1": 0.9333,
+      "fpr": 0.0164,
+      "accuracy": 0.9792,
+      "all_negative_baseline_accuracy": 0.8472,
+      "roc_auc": 0.9974,
+      "pr_auc": 0.9854,
+      "confusion_matrix": {
+        "tn": 120,
+        "fp": 2,
+        "fn": 1,
+        "tp": 21
+      }
+    },
+    "20": {
+      "horizon_seconds": 20,
+      "threshold": 0.9,
+      "precision": 0.9412,
+      "recall": 0.7273,
+      "f1": 0.8205,
+      "fpr": 0.0082,
+      "accuracy": 0.9514,
+      "all_negative_baseline_accuracy": 0.8472,
+      "roc_auc": 0.9885,
+      "pr_auc": 0.9517,
+      "confusion_matrix": {
+        "tn": 121,
+        "fp": 1,
+        "fn": 6,
+        "tp": 16
+      }
+    },
+    "30": {
+      "horizon_seconds": 30,
+      "threshold": 0.75,
+      "precision": 0.8947,
+      "recall": 0.7727,
+      "f1": 0.8293,
+      "fpr": 0.0164,
+      "accuracy": 0.9514,
+      "all_negative_baseline_accuracy": 0.8472,
+      "roc_auc": 0.9881,
+      "pr_auc": 0.9409,
+      "confusion_matrix": {
+        "tn": 120,
+        "fp": 2,
+        "fn": 5,
+        "tp": 17
+      }
+    }
+  },
+  "baselines": {
+    "logistic_regression": {
+      "10": {
+        "horizon_seconds": 10,
+        "threshold": 0.05,
+        "precision": 0.8333,
+        "recall": 0.9091,
+        "f1": 0.8696,
+        "fpr": 0.0328,
+        "accuracy": 0.9583,
+        "all_negative_baseline_accuracy": 0.8472,
+        "roc_auc": 0.997,
+        "pr_auc": 0.9857,
+        "confusion_matrix": {
+          "tn": 118,
+          "fp": 4,
+          "fn": 2,
+          "tp": 20
+        }
+      },
+      "20": {
+        "horizon_seconds": 20,
+        "threshold": 0.05,
+        "precision": 0.8333,
+        "recall": 0.9091,
+        "f1": 0.8696,
+        "fpr": 0.0328,
+        "accuracy": 0.9583,
+        "all_negative_baseline_accuracy": 0.8472,
+        "roc_auc": 0.9892,
+        "pr_auc": 0.9411,
+        "confusion_matrix": {
+          "tn": 118,
+          "fp": 4,
+          "fn": 2,
+          "tp": 20
+        }
+      },
+      "30": {
+        "horizon_seconds": 30,
+        "threshold": 0.05,
+        "precision": 0.75,
+        "recall": 0.8182,
+        "f1": 0.7826,
+        "fpr": 0.0492,
+        "accuracy": 0.9306,
+        "all_negative_baseline_accuracy": 0.8472,
+        "roc_auc": 0.9817,
+        "pr_auc": 0.8976,
+        "confusion_matrix": {
+          "tn": 116,
+          "fp": 6,
+          "fn": 4,
+          "tp": 18
+        }
+      }
+    },
+    "random_forest": {
+      "10": {
+        "horizon_seconds": 10,
+        "threshold": 0.1,
+        "precision": 0.9167,
+        "recall": 1.0,
+        "f1": 0.9565,
+        "fpr": 0.0164,
+        "accuracy": 0.9861,
+        "all_negative_baseline_accuracy": 0.8472,
+        "roc_auc": 0.9944,
+        "pr_auc": 0.9593,
+        "confusion_matrix": {
+          "tn": 120,
+          "fp": 2,
+          "fn": 0,
+          "tp": 22
+        }
+      },
+      "20": {
+        "horizon_seconds": 20,
+        "threshold": 0.6,
+        "precision": 0.8333,
+        "recall": 0.9091,
+        "f1": 0.8696,
+        "fpr": 0.0328,
+        "accuracy": 0.9583,
+        "all_negative_baseline_accuracy": 0.8472,
+        "roc_auc": 0.9424,
+        "pr_auc": 0.8301,
+        "confusion_matrix": {
+          "tn": 118,
+          "fp": 4,
+          "fn": 2,
+          "tp": 20
+        }
+      },
+      "30": {
+        "horizon_seconds": 30,
+        "threshold": 0.85,
+        "precision": 0.8095,
+        "recall": 0.7727,
+        "f1": 0.7907,
+        "fpr": 0.0328,
+        "accuracy": 0.9375,
+        "all_negative_baseline_accuracy": 0.8472,
+        "roc_auc": 0.9311,
+        "pr_auc": 0.7317,
+        "confusion_matrix": {
+          "tn": 118,
+          "fp": 4,
+          "fn": 5,
+          "tp": 17
+        }
+      }
+    },
+    "persistence": {
+      "10": {
+        "horizon_seconds": 10,
+        "threshold": 0.05,
+        "precision": 0.9091,
+        "recall": 0.9091,
+        "f1": 0.9091,
+        "fpr": 0.0164,
+        "accuracy": 0.9722,
+        "all_negative_baseline_accuracy": 0.8472,
+        "roc_auc": 0.9463,
+        "pr_auc": 0.8403,
+        "confusion_matrix": {
+          "tn": 120,
+          "fp": 2,
+          "fn": 2,
+          "tp": 20
+        }
+      },
+      "20": {
+        "horizon_seconds": 20,
+        "threshold": 0.05,
+        "precision": 0.8182,
+        "recall": 0.8182,
+        "f1": 0.8182,
+        "fpr": 0.0328,
+        "accuracy": 0.9444,
+        "all_negative_baseline_accuracy": 0.8472,
+        "roc_auc": 0.8927,
+        "pr_auc": 0.6972,
+        "confusion_matrix": {
+          "tn": 118,
+          "fp": 4,
+          "fn": 4,
+          "tp": 18
+        }
+      },
+      "30": {
+        "horizon_seconds": 30,
+        "threshold": 0.05,
+        "precision": 0.7273,
+        "recall": 0.7273,
+        "f1": 0.7273,
+        "fpr": 0.0492,
+        "accuracy": 0.9167,
+        "all_negative_baseline_accuracy": 0.8472,
+        "roc_auc": 0.839,
+        "pr_auc": 0.5706,
+        "confusion_matrix": {
+          "tn": 116,
+          "fp": 6,
+          "fn": 6,
+          "tp": 16
+        }
+      }
+    }
+  }
+}

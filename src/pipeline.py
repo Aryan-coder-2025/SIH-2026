@@ -39,13 +39,15 @@ class CyberForecastPipeline:
         host_id: str,
         window_id: int,
         timestamp: Optional[str],
-        current_risk: float,
-        risk_timeline: Sequence[Union[float, Dict[str, float]]],
-        predicted_stage: str,
-        temporal_features: Union[List[Dict[str, float]], np.ndarray],
-        feature_attributions: Union[Dict[int, Any], np.ndarray, List[Any]],
+        forecast_risk_10s: Optional[float] = None,
+        risk_timeline: Sequence[Union[float, Dict[str, float]]] = (),
+        predicted_stage: str = "Benign",
+        temporal_features: Union[List[Dict[str, float]], np.ndarray] = (),
+        feature_attributions: Union[Dict[int, Any], np.ndarray, List[Any]] = (),
         feature_names: Optional[List[str]] = None,
         temporal_attribution_tensor: Optional[np.ndarray] = None,
+        observed_state: Optional[str] = None,
+        current_risk: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Executes the end-to-end integration pipeline:
@@ -76,7 +78,10 @@ class CyberForecastPipeline:
 
         # 3. Maximum forecasted risk across horizons
         risks = [h["predicted_risk"] for h in xai_result["horizons"]]
-        max_forecast_risk = max(risks) if risks else current_risk
+        r10 = float(forecast_risk_10s if forecast_risk_10s is not None else (current_risk if current_risk is not None else (risks[0] if risks else 0.0)))
+        r20 = float(risks[1] if len(risks) > 1 else r10)
+        r30 = float(risks[2] if len(risks) > 2 else (risks[-1] if risks else r10))
+        max_forecast_risk = max(risks) if risks else r10
 
         # 4. MITRE Candidate Mapping
         mitre_result: MitreInterpretation = self.mapper.map_prediction_to_mitre(
@@ -104,8 +109,12 @@ class CyberForecastPipeline:
             "window_id": window_id,
             "timestamp": timestamp,
             "forecast": {
-                "current_risk": round(float(current_risk), 4),
-                "predicted_risk_30s": round(float(risks[-1] if risks else current_risk), 4),
+                "observed_state": observed_state or ("MALICIOUS" if r10 >= 0.5 else "BENIGN"),
+                "forecast_risk_10s": round(r10, 4),
+                "forecast_risk_20s": round(r20, 4),
+                "forecast_risk_30s": round(r30, 4),
+                "current_forecast_risk": round(r10, 4),
+                "predicted_risk_30s": round(r30, 4),
                 "urgency_level": xai_result["primary_horizon"]["urgency_level"],
                 "predicted_stage": predicted_stage,
                 "risk_timeline": timeline_formatted,

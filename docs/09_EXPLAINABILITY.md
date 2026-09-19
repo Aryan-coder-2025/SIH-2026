@@ -1,7 +1,14 @@
-# 09 — Explainability & SHAP Translation Protocol
+# 09 — Explainability & Feature Attribution Protocol
+
+> [!IMPORTANT]
+> **Implementation & Terminology Disclosure:**
+> Integrated Gradients attribution is implemented (`src/explain/integrated_gradients.py`).
+> SHAP computation is NOT implemented / validated in the current environment due to `shap` package absence.
+> All feature attributions in this repository represent Path-Integrated Gradients or gradient-saliency attributions.
 
 ## Overview
-This document defines the protocol for translating **SHAP attributions**, **gradient saliency**, and **temporal attention weights** into **human-interpretable, multi-horizon SOC explanations**.
+This document defines the protocol for translating **feature attributions**, **gradient saliency**, and **temporal attention weights** into **human-interpretable, multi-horizon SOC explanations**.
+
 
 - **Protocol Version:** `2026.09.10-r1`
 - **Component Owner:** Srijani (Cybersecurity + MITRE + Explainability)

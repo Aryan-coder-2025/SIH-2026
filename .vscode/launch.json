@@ -1,0 +1,55 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "SIH26153 Dashboard",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "streamlit",
+            "args": [
+                "run",
+                "${workspaceFolder}/src/dashboard.py",
+                "--server.port=8501",
+                "--server.headless=false"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
+            "name": "SIH26153 Attack Demo",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run_demo.py",
+            "args": [
+                "--scenario",
+                "attack"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "SIH26153 Benign Demo",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run_demo.py",
+            "args": [
+                "--scenario",
+                "benign"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "SIH26153 Full Test Suite",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        }
+    ]
+}
